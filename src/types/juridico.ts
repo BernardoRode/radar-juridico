@@ -69,6 +69,10 @@ export interface AnaliseInteligencia {
     transitoEmJulgado?: boolean;
     pautaJulgamento2Grau?: boolean;
     checklistPericia?: string[];
+    precedentesDetectados?: string[];
+    alertaTeimosinhaSisbajud?: string;
+    hashProvaCaptura?: string;
+    timestampCaptura?: string;
     urgencia: 'ALTA' | 'MEDIA' | 'NORMAL';
   };
 }
@@ -99,6 +103,14 @@ export interface ProcessoAutoGerido {
   transitoEmJulgado?: boolean;
   pautaJulgamento2Grau?: boolean;
   checklistPericia?: string[];
+  precedentesDetectados?: string[];
+  alertaTeimosinhaSisbajud?: string;
+  dossiePreAudiencia?: string[];
+  viabilidadeAcordo?: {
+    recomendacao: string;
+    economiaEstimada: string;
+  };
+  hashProvaCaptura?: string;
   scoreOportunidade?: number;
   motivosScore?: string[];
   mensagemClienteWhatsApp?: string;

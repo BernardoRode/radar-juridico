@@ -83,22 +83,29 @@ export async function executarVarreduraRadar(
     const todasComunicacoes = new Map<number, ComunicacaoCNJ>();
     const erros: string[] = [];
 
-    // 1. Varre cada Cliente Monitorado
+    // 1. Varre cada Cliente Monitorado + Variações de Nome e Raiz de CNPJ (Issue #14)
     for (const cli of clientes) {
-      try {
-        const p = new URLSearchParams({
-          nomeParte: cli.nome,
-          dataDisponibilizacaoInicio: inicio,
-          dataDisponibilizacaoFim: hoje,
-          pagina: '1',
-          itensPorPagina: '25',
-        });
-        const itens = await consultarCnj(p);
-        for (const item of itens) {
-          if (item.id) todasComunicacoes.set(item.id, item);
+      const termosCliente = [
+        cli.nome,
+        ...(cli.variacoes ? cli.variacoes.split(',').map((s) => s.trim()) : []),
+      ].filter(Boolean);
+
+      for (const termo of termosCliente.slice(0, 4)) {
+        try {
+          const p = new URLSearchParams({
+            nomeParte: termo,
+            dataDisponibilizacaoInicio: inicio,
+            dataDisponibilizacaoFim: hoje,
+            pagina: '1',
+            itensPorPagina: '25',
+          });
+          const itens = await consultarCnj(p);
+          for (const item of itens) {
+            if (item.id) todasComunicacoes.set(item.id, item);
+          }
+        } catch (e: unknown) {
+          erros.push(`Cliente ${termo}: ${e instanceof Error ? e.message : 'erro'}`);
         }
-      } catch (e: unknown) {
-        erros.push(`Cliente ${cli.nome}: ${e instanceof Error ? e.message : 'erro'}`);
       }
     }
 

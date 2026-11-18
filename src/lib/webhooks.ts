@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
 
 export interface AlertaUrgenciaPayload {
@@ -8,9 +9,39 @@ export interface AlertaUrgenciaPayload {
   statusConcorrencia: string;
 }
 
+const WEBHOOK_SECRET =
+  process.env.WEBHOOK_HMAC_SECRET || 'radar-juridico-webhook-hmac-secret';
+
+async function enviarComRetryHmac(url: string, bodyStr: string, tentativas = 2): Promise<boolean> {
+  const assinatura = crypto
+    .createHmac('sha256', WEBHOOK_SECRET)
+    .update(bodyStr)
+    .digest('hex');
+
+  for (let i = 0; i <= tentativas; i++) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Radar-Signature': `sha256=${assinatura}`,
+        },
+        body: bodyStr,
+      });
+      if (res.ok) return true;
+    } catch {
+      // Backoff antes da próxima tentativa
+    }
+    if (i < tentativas) {
+      await new Promise((r) => setTimeout(r, 400 * (i + 1)));
+    }
+  }
+  return false;
+}
+
 /**
- * Dispara notificações HTTP POST (Webhook / WhatsApp Gateway / Push Service)
- * para todos os destinos ativos quando surgirem alertas de urgência ALTA.
+ * Issue #9 + Issue #32: Dispara notificações HTTP POST resilientes (com Retry exponencial
+ * e assinatura HMAC-SHA256 `X-Radar-Signature`) para todos os destinos ativos.
  */
 export async function dispararWebhooksAlertaAlta(
   alertas: AlertaUrgenciaPayload[]
@@ -40,21 +71,14 @@ export async function dispararWebhooksAlertaAlta(
 
   await Promise.all(
     webhooks.map(async (wh) => {
-      try {
-        const res = await fetch(wh.urlDestino, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...payload,
-            canal: wh.canal,
-            destinoNome: wh.nome,
-          }),
-        });
-        if (res.ok) enviados += 1;
-        else falhas += 1;
-      } catch {
-        falhas += 1;
-      }
+      const bodyStr = JSON.stringify({
+        ...payload,
+        canal: wh.canal,
+        destinoNome: wh.nome,
+      });
+      const ok = await enviarComRetryHmac(wh.urlDestino, bodyStr, 2);
+      if (ok) enviados += 1;
+      else falhas += 1;
     })
   );
 

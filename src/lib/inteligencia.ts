@@ -8,14 +8,19 @@ import {
   calcularLimiteConfirmacaoDomicilio,
   calcularPrazoFatal,
   calcularScoreOportunidade,
+  calcularViabilidadeAcordo,
   classificarFaseProcessual,
   detectarMeroExpediente,
   detectarPautaJulgamento2Grau,
+  detectarPrecedentesVinculantes,
   detectarRiscoGolpeAlvara,
+  detectarTeimosinhaSisbajud,
   detectarTransitoEmJulgado,
   extrairHonorariosSucumbencia,
   extrairLinkAudienciaVirtual,
   gerarChecklistPericia,
+  gerarDossiePreAudiencia,
+  gerarHashProvaCaptura,
   gerarMensagemWhatsAppCliente,
   LABEL_FASE_PROCESSUAL,
 } from '@/lib/auto-update';
@@ -142,6 +147,14 @@ export function extrairAlertasTexto(
   const transitoEmJulgado = detectarTransitoEmJulgado(texto);
   const pautaJulgamento2Grau = detectarPautaJulgamento2Grau(texto, tipoComunicacao);
   const checklistPericia = gerarChecklistPericia(faseCodigo);
+  const precedentesDetectados = detectarPrecedentesVinculantes(texto);
+  const alertaTeimosinhaSisbajud = detectarTeimosinhaSisbajud(texto);
+  const hashProvaCaptura = gerarHashProvaCaptura(
+    siglaTribunal || 'CNJ',
+    dataDisponibilizacao || '',
+    texto
+  );
+  const timestampCaptura = new Date().toISOString();
   const limiteConfirmacaoDomicilio3Dias =
     faseCodigo === 'CITACAO'
       ? calcularLimiteConfirmacaoDomicilio(dataDisponibilizacao, siglaTribunal)
@@ -163,6 +176,10 @@ export function extrairAlertasTexto(
     transitoEmJulgado,
     pautaJulgamento2Grau,
     checklistPericia,
+    precedentesDetectados,
+    alertaTeimosinhaSisbajud,
+    hashProvaCaptura,
+    timestampCaptura,
     urgencia,
   };
 }
@@ -362,6 +379,21 @@ export function consolidarProcessosAutomaticamente(
     });
     proc.scoreOportunidade = score;
     proc.motivosScore = motivos;
+    const pubPrincipal = proc.historicoPublicacoes[0];
+    const alerts0 = pubPrincipal?.inteligencia.alertasAutomaticos;
+    proc.precedentesDetectados = alerts0?.precedentesDetectados;
+    proc.alertaTeimosinhaSisbajud = alerts0?.alertaTeimosinhaSisbajud;
+    proc.hashProvaCaptura = alerts0?.hashProvaCaptura;
+    const faseCod = classificarFaseProcessual(textoConcatenado);
+    proc.dossiePreAudiencia = gerarDossiePreAudiencia(
+      faseCod,
+      alerts0?.audienciaDetectada
+    );
+    proc.viabilidadeAcordo = calcularViabilidadeAcordo(
+      faseCod,
+      proc.urgenciaMaxima,
+      alerts0?.valorDetectado
+    );
     proc.mensagemClienteWhatsApp = gerarMensagemWhatsAppCliente({
       numeroProcesso: proc.numeroFormatado,
       tribunal: proc.siglaTribunal,

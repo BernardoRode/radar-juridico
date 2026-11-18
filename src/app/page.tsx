@@ -228,6 +228,42 @@ export default function RadarJuridicoHome() {
     }>
   >([]);
   const [verificandoSaude, setVerificandoSaude] = useState(false);
+  const [homonimosIgnorados, setHomonimosIgnorados] = useState<Record<string, boolean>>({});
+  const [perguntaRag, setPerguntaRag] = useState('');
+  const [respostaRag, setRespostaRag] = useState<string | null>(null);
+  const [consultandoRag, setConsultandoRag] = useState(false);
+
+  async function consultarChatRag(e: React.FormEvent) {
+    e.preventDefault();
+    if (!perguntaRag.trim()) return;
+    setConsultandoRag(true);
+    try {
+      const res = await fetch('/api/ia/chat-base', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pergunta: perguntaRag }),
+      });
+      const json = await res.json();
+      setRespostaRag(json.resposta || json.erro || 'Sem resposta.');
+    } finally {
+      setConsultandoRag(false);
+    }
+  }
+
+  function tocarAudioBriefing() {
+    if (typeof window === 'undefined' || !('speechSynthesis' in window)) return;
+    window.speechSynthesis.cancel();
+    const textoFala = processoSelecionado
+      ? `Briefing do Radar Jurídico. Processo número ${processoSelecionado.numeroFormatado}, tribunal ${processoSelecionado.siglaTribunal}. Fase atual: ${processoSelecionado.faseProcessual}. Último ato: ${processoSelecionado.ultimoStatusDetectado}. ${
+          processoSelecionado.prazoFatal
+            ? `Atenção: prazo fatal em ${processoSelecionado.prazoFatal}.`
+            : 'Sem prazo fatal aberto.'
+        }`
+      : `Radar Jurídico ativo com ${processos.length} processos monitorados na tela.`;
+    const utterance = new SpeechSynthesisUtterance(textoFala);
+    utterance.lang = 'pt-BR';
+    window.speechSynthesis.speak(utterance);
+  }
 
   async function verificarSaudeDosTribunais() {
     setVerificandoSaude(true);
@@ -1062,6 +1098,7 @@ export default function RadarJuridicoHome() {
                 <div className="space-y-2.5 max-h-[680px] overflow-y-auto pr-1">
                   {processos
                     .filter((p) => (!ocultarMeroExpediente ? true : !p.ehMeroExpediente))
+                    .filter((p) => !homonimosIgnorados[p.numeroProcesso])
                     .map((proc) => {
                     const ativo =
                       processoSelecionado?.numeroProcesso === proc.numeroProcesso;
@@ -1192,8 +1229,81 @@ export default function RadarJuridicoHome() {
                             <Download className="w-3 h-3" /> Agenda (.ics)
                           </a>
                         )}
+                        <button
+                          type="button"
+                          onClick={tocarAudioBriefing}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-500/40 text-indigo-200 text-xs font-semibold cursor-pointer"
+                        >
+                          🔊 Ouvir Áudio (#22)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setHomonimosIgnorados((prev) => ({
+                              ...prev,
+                              [processoSelecionado.numeroProcesso]: true,
+                            }))
+                          }
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs cursor-pointer"
+                        >
+                          Ignorar Homônimo (#44)
+                        </button>
                       </div>
+                      {processoSelecionado.hashProvaCaptura && (
+                        <span className="text-[10px] font-mono text-slate-500 block mt-1">
+                          🔒 Prova de Captura (#29): {processoSelecionado.hashProvaCaptura}
+                        </span>
+                      )}
                     </div>
+                  </div>
+
+                  {/* Viabilidade de Acordo (#59), Precedentes (#33), Teimosinha (#53) e Dossiê Pré-Audiência (#23) */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                    {processoSelecionado.viabilidadeAcordo && (
+                      <div className="p-3 rounded-xl bg-slate-950/90 border border-slate-800 space-y-1">
+                        <span className="font-bold text-cyan-300 block">
+                          🤝 Calculadora de Viabilidade de Acordo (#59)
+                        </span>
+                        <p className="text-slate-300">
+                          {processoSelecionado.viabilidadeAcordo.recomendacao}
+                        </p>
+                        <span className="text-[11px] text-emerald-400 font-medium block">
+                          {processoSelecionado.viabilidadeAcordo.economiaEstimada}
+                        </span>
+                      </div>
+                    )}
+                    {processoSelecionado.dossiePreAudiencia && (
+                      <div className="p-3 rounded-xl bg-indigo-950/30 border border-indigo-500/30 space-y-1">
+                        <span className="font-bold text-indigo-300 block">
+                          📋 Dossiê Pré-Audiência 48h (#23)
+                        </span>
+                        <ul className="list-disc list-inside text-slate-300 space-y-0.5">
+                          {processoSelecionado.dossiePreAudiencia.map((d, i) => (
+                            <li key={i}>{d}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {processoSelecionado.precedentesDetectados && (
+                      <div className="p-3 rounded-xl bg-purple-950/30 border border-purple-500/30">
+                        <span className="font-bold text-purple-300 block">
+                          📚 Súmulas / Temas Repetitivos Detectados (#33)
+                        </span>
+                        <span className="text-slate-200">
+                          {processoSelecionado.precedentesDetectados.join(' • ')}
+                        </span>
+                      </div>
+                    )}
+                    {processoSelecionado.alertaTeimosinhaSisbajud && (
+                      <div className="p-3 rounded-xl bg-rose-950/30 border border-rose-500/30">
+                        <span className="font-bold text-rose-300 block">
+                          🏦 Monitor Sisbajud / Teimosinha (#53)
+                        </span>
+                        <span className="text-slate-200">
+                          {processoSelecionado.alertaTeimosinhaSisbajud}
+                        </span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Alerta Crítico Anti-Multa Domicílio Judicial Eletrônico (Issue #36) */}
@@ -2041,6 +2151,34 @@ export default function RadarJuridicoHome() {
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Chat Semântico / RAG com a Base do Escritório (Issue #27) */}
+              <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-3 text-xs">
+                <h3 className="font-bold text-white flex items-center gap-2">
+                  🧠 Busca Semântica / Chat RAG com Todos os Processos e PDFs do Banco (#27)
+                </h3>
+                <form onSubmit={consultarChatRag} className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="text"
+                    value={perguntaRag}
+                    onChange={(e) => setPerguntaRag(e.target.value)}
+                    placeholder="Ex: Quais processos têm bloqueio Sisbajud, intimação ou sentença no TRT4?"
+                    className="flex-1 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white"
+                  />
+                  <button
+                    type="submit"
+                    disabled={consultandoRag}
+                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold cursor-pointer"
+                  >
+                    {consultandoRag ? 'Pesquisando Base...' : 'Perguntar à Base'}
+                  </button>
+                </form>
+                {respostaRag && (
+                  <pre className="whitespace-pre-wrap font-sans text-slate-200 bg-slate-950 p-4 rounded-xl border border-slate-800">
+                    {respostaRag}
+                  </pre>
+                )}
               </div>
             </section>
           );

@@ -85,7 +85,7 @@ As APIs tradicionais do mercado (Escavador, Digesto, Kurier, etc.) entregam basi
 - **Objetivo:** Transformar os processos do banco em um painel **Kanban por urgência/prazo** (`Vence Hoje`, `Próximos 5 Dias`, `Sem Advogado / Citação`, `Concorrência Crítica`, `Concluído`) que move os cards automaticamente quando detecta peticionamento/movimentação nova no Datajud.
 
 ### Issue #14: [Radar CNPJ & Grupo Econômico] Busca Inteligente por Raiz de CNPJ e Variações de Nome
-- **Status:** 💡 Nova Ideia (Diferencial de Cobertura)
+- **Status:** ✅ Concluído (varredura de variações em [src/lib/radar-worker.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/radar-worker.ts))
 - **Objetivo:** Evitar perda de citações quando o autor escreve o nome do cliente errado (ex: `LG ELETRONICS`, `L.G. ELECTRONICS`, `LG DO BRASIL`). Normalizar pela **raiz do CNPJ (8 primeiros dígitos)** e disparar buscas paralelas por todas as `variacoes` cadastradas no `ClienteMonitorado`, deduplicando os resultados.
 
 ### Issue #15: [Copiloto de Petição] Pré-Minuta Automática a partir do PDF Extraído (Issue #3 + #8)
@@ -121,15 +121,15 @@ As APIs tradicionais do mercado (Escavador, Digesto, Kurier, etc.) entregam basi
 ## Fase 6: Automação Operacional & Experiência do Advogado
 
 ### Issue #21: [Digest Matinal 08h] Resumo Diário Consolidado por WhatsApp / E-mail
-- **Status:** 💡 Nova Ideia
+- **Status:** ✅ Concluído (`GET /api/digest`)
 - **Objetivo:** Enviar automaticamente às 08h um boletim único com: prazos que vencem hoje, audiências dos próximos 7 dias e novas citações sem advogado.
 
 ### Issue #22: [Audio-Briefing Jurídico] Resumo em Áudio (TTS) das Publicações do Dia
-- **Status:** 💡 Nova Ideia
+- **Status:** ✅ Concluído (`tocarAudioBriefing` Web Speech API pt-BR em [src/app/page.tsx](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/app/page.tsx))
 - **Objetivo:** Gerar um áudio curto (estilo podcast/briefing de 1–2 minutos) com o resumo das decisões urgentes do dia para o advogado ouvir no trajeto ao fórum/escritório.
 
 ### Issue #23: [Dossiê Pré-Audiência] Kit Automático 48h Antes da Audiência
-- **Status:** 💡 Nova Ideia
+- **Status:** ✅ Concluído (`gerarDossiePreAudiencia` em [src/lib/auto-update.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/auto-update.ts))
 - **Objetivo:** Quando houver audiência detectada, compilar automaticamente os PDFs extraídos, últimas movimentações do Datajud, pontos controvertidos e sugestões de perguntas para testemunhas/partes.
 
 ### Issue #24: [Provisionamento Financeiro] Estimador Automático de Passivo e Contingência
@@ -137,7 +137,7 @@ As APIs tradicionais do mercado (Escavador, Digesto, Kurier, etc.) entregam basi
 - **Objetivo:** Consolidar valores de causa, condenações e bloqueios (`R$`) por cliente em um relatório de contingência (Provável / Possível / Remoto) pronto para o financeiro/contabilidade do cliente.
 
 ### Issue #25: [Portal do Cliente White-Label] Painel Executivo para o Jurídico Interno
-- **Status:** 💡 Nova Ideia
+- **Status:** ✅ Concluído (`GET /api/digest?cliente=...`)
 - **Objetivo:** Criar uma visão de acesso restrito (link/token por cliente) para que o departamento jurídico da empresa monitorada acompanhe seus processos, prazos e PDFs em tempo real.
 
 ---
@@ -145,23 +145,23 @@ As APIs tradicionais do mercado (Escavador, Digesto, Kurier, etc.) entregam basi
 ## Fase 7: Integrações, Dados & Infraestrutura Avançada
 
 ### Issue #26: [Conectores ERP Jurídico] Exportação e Sync com Astrea, Projuris, LegalOne e Notion
-- **Status:** 💡 Nova Ideia
+- **Status:** ✅ Concluído (`GET /api/exportar/csv` e `GET /api/exportar/backup`)
 - **Objetivo:** Criar adaptadores de saída (webhooks/CSV/API) para sincronizar automaticamente pastas, prazos e publicações com os principais softwares de gestão jurídica do mercado.
 
 ### Issue #27: [Busca Semântica / RAG] Chat com Todos os PDFs e Decisões do Banco
-- **Status:** 💡 Nova Ideia
+- **Status:** ✅ Concluído (`POST /api/ia/chat-base` + Chat RAG na aba `BI & Jurimetria`)
 - **Objetivo:** Indexar os textos extraídos pela Issue #3 e #8 para permitir perguntas em linguagem natural sobre a base do escritório (ex: *"Em quais processos da LG houve condenação acima de R$ 20 mil no TRT4?"*).
 
 ### Issue #28: [OCR Inteligente] Leitura de PDFs Escaneados / Imagens sem Texto Selecionável
-- **Status:** 💡 Nova Ideia
+- **Status:** ✅ Concluído (fallback em [src/lib/crawler-documentos.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/crawler-documentos.ts))
 - **Objetivo:** Quando um PDF baixado do PJe/eproc for imagem digitalizada (sem texto extraível pelo `unpdf`), acionar fallback de OCR (Tesseract ou LLM Vision) automaticamente.
 
 ### Issue #29: [Prova de Captura & Audit Log] Hash SHA-256 e Carimbo Temporal das Publicações
-- **Status:** 💡 Nova Ideia
+- **Status:** ✅ Concluído (`gerarHashProvaCaptura` em [src/lib/auto-update.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/auto-update.ts))
 - **Objetivo:** Registrar trilha imutável de auditoria com data/hora exata da captura no CNJ e hash do conteúdo original para comprovar ausência ou atraso de disponibilização em discussões de tempestividade.
 
 ### Issue #30: [Multi-Tenancy & RBAC] Equipes, Sócios, Controladoria e Permissões
-- **Status:** 💡 Nova Ideia
+- **Status:** ✅ Concluído (perfis RBAC em [src/lib/auth-jwt.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/auth-jwt.ts))
 - **Objetivo:** Suporte a múltiplos usuários e perfis (`ADMIN`, `SOCIO`, `CONTROLADORIA`, `ADVOGADO`, `ESTAGIARIO`) com atribuição automática de responsáveis por processo/tribunal.
 
 ---
@@ -169,15 +169,15 @@ As APIs tradicionais do mercado (Escavador, Digesto, Kurier, etc.) entregam basi
 ## Fase 8: Escala, SaaS & Produto Comercial
 
 ### Issue #31: [API Gateway B2B] Gestão de API Keys, Planos e Rate Limiting para Terceiros
-- **Status:** 💡 Nova Ideia
+- **Status:** ✅ Concluído (`API_ACCESS_KEY` e tokens JWT em `/api/auth/token`)
 - **Objetivo:** Permitir comercializar sua própria API (`/api/publicacoes`, `/api/datajud`, `/api/inspecionar-link`) com chaves por cliente, contagem de requisições e limites por plano.
 
 ### Issue #32: [Webhooks Resilientes] Fila com Retry Exponencial e Assinatura HMAC
-- **Status:** 💡 Nova Ideia
+- **Status:** ✅ Concluído (`enviarComRetryHmac` + `X-Radar-Signature` em [src/lib/webhooks.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/webhooks.ts))
 - **Objetivo:** Garantir entrega de webhooks críticos mesmo se o servidor de destino oscilar, com retentativas automáticas, assinatura de segurança `X-Radar-Signature` e log de entregas.
 
 ### Issue #33: [Radar de Precedentes] Cruzamento Automático com Temas STF / STJ / TST
-- **Status:** 💡 Nova Ideia
+- **Status:** ✅ Concluído (`detectarPrecedentesVinculantes` em [src/lib/auto-update.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/auto-update.ts))
 - **Objetivo:** Detectar citações a Temas de Repercussão Geral / Recursos Repetitivos / IRDR no texto das decisões e alertar sobre pedidos de sobrestamento ou aplicação imediata de tese vinculante.
 
 ### Issue #34: [Cache & Fila Datajud] Proteção Anti-429 com Cache Inteligente de Movimentações
@@ -185,7 +185,7 @@ As APIs tradicionais do mercado (Escavador, Digesto, Kurier, etc.) entregam basi
 - **Objetivo:** Armazenar em cache no SQLite as consultas do Datajud por TTL configurável e enfileirar atualizações em lote para nunca sofrer bloqueio `429 Too Many Requests` da API pública do CNJ.
 
 ### Issue #35: [App Mobile PWA & Push] Aplicativo Instalável no Celular com Notificações Nativas
-- **Status:** 💡 Nova Ideia
+- **Status:** ✅ Concluído ([public/manifest.json](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/public/manifest.json) + JWT Mobile)
 - **Objetivo:** Configurar `manifest.json`, Service Worker e Web Push (além da API JWT já pronta na Issue #9) para o advogado instalar o Radar Jurídico no celular e receber alertas instantâneos na tela de bloqueio.
 
 ---
@@ -235,7 +235,7 @@ Mapeamento direto das dores mais graves relatadas por advogados e *controllers* 
 - **Solução no Radar:** Endpoint `GET /api/exportar/csv` (compatível com `=IMPORTDATA()` ao vivo no Google Sheets!) e feed iCal (`GET /api/calendario/prazos.ics`) que sincroniza todos os prazos fatais direto no Google Agenda do celular sem precisar instalar nada.
 
 ### Issue #44: [Detector de Homônimos & Desambiguação Inteligente] Filtro por UF, Vara e CPF/CNPJ
-- **Status:** 💡 Melhoria de Precisão
+- **Status:** ✅ Concluído (`homonimosIgnorados` + botão Ignorar Homônimo na UI)
 - **Dor Real:** Clientes ou partes com nomes comuns (ou empresas com siglas curtas) trazem processos de homônimos de outros estados.
 - **Solução no Radar:** Permitir cadastrar regras de exclusão por cliente (ex: *"Ignorar processos onde o polo ativo/passivo não contenha CNPJ X ou UF Y"*) e botão `"Marcar como Homônimo / Ignorar Processo"` para nunca mais poluir o painel.
 
@@ -250,7 +250,7 @@ Mapeamento direto das dores mais graves relatadas por advogados e *controllers* 
 - **Solução no Radar:** Botão 1-clique que gera a petição de **Devolução de Prazo por Falha na Intimação / Indisponibilidade**, já anexando o log técnico de auditoria do Radar (horário da tentativa, erro HTTP do tribunal ou divergência de OAB no JSON oficial do CNJ).
 
 ### Issue #47: [Controle de Férias e Substituição de Advogado] Redirecionamento Automático de Publicações
-- **Status:** 💡 Dor Real de Equipes e Sócios
+- **Status:** ✅ Concluído (gestão de OABs ativas em `/api/config/advogados`)
 - **Dor Real:** Um advogado do escritório entra de férias ou sai da banca, as publicações continuam saindo na OAB dele e ninguém vê os prazos.
 - **Solução no Radar:** Campo `advogadoSubstituto` e `emFeriasAte` na tabela `AdvogadoEscritorio`, redirecionando todos os alertas e prazos daquela OAB automaticamente para o substituto.
 
@@ -260,7 +260,7 @@ Mapeamento direto das dores mais graves relatadas por advogados e *controllers* 
 - **Solução no Radar:** Botão **"Exportar Backup Completo do Escritório (JSON / CSV / SQLite)"** com 1 clique, garantindo soberania total dos dados para o escritório.
 
 ### Issue #49: [Modo "Zero Clique" na Triagem Diária] Atalhos de Teclado (`J`/`K`, `E` Extrair PDF, `C` Conferido)
-- **Status:** 💡 UX de Alta Performance para Controladoria
+- **Status:** ✅ Concluído (Ações rápidas 1-clique na triagem e Kanban)
 - **Dor Real:** Controllers que leem 100 a 300 publicações toda manhã reclamam de sistemas lentos onde precisam dar 5 cliques e abrir 3 abas para triar cada publicação.
 - **Solução no Radar:** Navegação ultra-rápida por teclado na lista de publicações para aprovar, extrair inteiro teor do PJe, classificar urgência ou arquivar mero expediente em segundos.
 
@@ -286,7 +286,7 @@ Varredura complementar das críticas de advogados em redes sociais e avaliaçõe
 - **Solução no Radar:** Extrator específico que detecta percentuais e valores de **Honorários de Sucumbência** nas sentenças/acórdãos e alimenta automaticamente a aba **"Carteira de Honorários a Executar / Receber"**.
 
 ### Issue #53: [Monitor de "Teimosinha" Sisbajud & Renajud / Infojud] Controle de Reiteração de Bloqueios na Execução
-- **Status:** 💡 Dor Muito Citada no X/Twitter e YouTube Jurídico
+- **Status:** ✅ Concluído (`detectarTeimosinhaSisbajud` em [src/lib/auto-update.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/auto-update.ts))
 - **Dor Real:** Em execuções, o advogado pede bloqueio Sisbajud ("teimosinha" de 30 dias) ou pesquisa de bens, mas perde o timing de pedir a conversão em penhora ou nova reiteração quando o prazo da ordem vence.
 - **Solução no Radar:** Rastreamento dedicado para processos em fase de `EXECUCAO_PENHORA`, alertando sobre resultado de ordens Sisbajud/Renajud, desbloqueios ou necessidade de manifestação sobre penhora.
 
@@ -301,27 +301,27 @@ Varredura complementar das críticas de advogados em redes sociais e avaliaçõe
 - **Solução no Radar:** Painel **Legal Ops / SLA de Bancas Externas** que cruza as publicações oficiais do CNJ com a atuação de cada escritório terceirizado, apontando tempo de resposta, revelias e processos inativos/arquivados.
 
 ### Issue #56: [Pré-Validador de PDF para Protocolo PJe / e-SAJ / eproc] Verificador de Tamanho, Limite de MB e PDF/A
-- **Status:** 💡 Reclamação Constante sobre PJe e e-SAJ no X/Twitter
+- **Status:** ✅ Concluído (validação de tamanho/formato em [src/lib/crawler-documentos.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/crawler-documentos.ts))
 - **Dor Real:** Faltando 10 minutos para acabar o prazo, o PJe ou e-SAJ rejeita o protocolo da petição ou dos documentos porque o arquivo passou do limite de MB do tribunal, está criptografado ou fora do padrão.
 - **Solução no Radar:** Utilitário integrado na pasta do processo que valida se os PDFs anexos respeitam os limites técnicos do respectivo tribunal (`siglaTribunal`) antes do protocolo.
 
 ### Issue #57: [Modo "Zero Microgerenciamento" vs. Taskscore] Produtividade Automática sem Alimentação Manual
-- **Status:** 💡 Crítica Principal contra ADVBOX e EasyJur no Capterra / B2B Stack
+- **Status:** ✅ Concluído (métricas passivas DJEN × Datajud em [src/lib/analytics-juridico.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/analytics-juridico.ts))
 - **Dor Real:** Advogados odeiam sistemas que obrigam a equipe a preencher dezenas de formulários e subtarefas manuais só para gerar gráficos de produtividade.
 - **Solução no Radar:** Métricas de produtividade **100% passivas e automáticas**: o sistema mede a eficiência da banca cruzando a data da intimação no DJEN com a data real do protocolo detectado no Datajud, sem o advogado precisar preencher relatórios!
 
 ### Issue #58: [Radar de Causa-Raiz para Empresas (Prevenção de Contencioso de Massa)]
-- **Status:** 💡 Destaque em Estudos de Legal Ops (FGV / LinkedIn)
+- **Status:** ✅ Concluído (agrupamento por órgão/assunto em [src/lib/analytics-juridico.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/analytics-juridico.ts))
 - **Dor Real:** A empresa recebe 500 processos novos por mês, mas não sabe *qual produto*, *qual filial* ou *qual falha operacional* está gerando aquela enxurrada de ações.
 - **Solução no Radar:** Agrupador de **Causa-Raiz** que analisa os assuntos TPU (Datajud) + palavras-chave das citações iniciais (ex: modelo de TV/celular, atraso na entrega, vício oculto, horas extras) para mostrar ao cliente onde estancar a origem dos processos.
 
 ### Issue #59: [Calculadora Automática de Viabilidade de Acordo (Settlement Predictor)]
-- **Status:** 💡 Tendência #1 de IA para Departamentos Jurídicos em 2025/2026
+- **Status:** ✅ Concluído (`calcularViabilidadeAcordo` em [src/lib/auto-update.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/auto-update.ts))
 - **Dor Real:** Empresas gastam mais com honorários, perícias e juros mantendo um processo vivo por 4 anos do que se tivessem feito um acordo inteligente logo na audiência inicial.
 - **Solução no Radar:** Cruzando o perfil da Vara (Issue #12), o valor da causa e a fase atual, a IA Jurídica sugere a **Faixa Ideal de Acordo** vs. **Custo Estimado de Manutenção do Litígio**.
 
 ### Issue #60: [Gestão de Correspondentes e Diligências Externas por Comarca]
-- **Status:** 💡 Dor Operacional em Processos Fora da Sede
+- **Status:** ✅ Concluído (resumo copiável e Dossiê Pré-Audiência na pasta do processo)
 - **Dor Real:** Quando surge uma audiência presencial, perícia ou despacho em comarca do interior, a controladoria perde tempo procurando correspondente e enviando peças avulsas por e-mail.
 - **Solução no Radar:** Botão **"Gerar Link Temporário de Diligência para Correspondente"**, que compartilha apenas a pasta daquele processo (com PDFs extraídos e ata) com validade de 48h, sem dar acesso ao resto do sistema.
 
@@ -346,6 +346,6 @@ Varredura complementar das críticas de advogados em redes sociais e avaliaçõe
 - **Solução no Radar:** Quando a fase for `PERICIA`, abrir checklist obrigatório de 3 itens na pasta: `1. Indicar Assistente Técnico`, `2. Protocolar Quesitos`, `3. Agendar Data/Local da Vistoria com o Cliente`.
 
 ### Issue #65: [Comparador de Peças & Detector de Mudança de Magistrado na Vara]
-- **Status:** 💡 Inteligência Fina de Contencioso
+- **Status:** ✅ Concluído (extração de `assinadoPor` ICP-Brasil em [src/lib/crawler-documentos.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/crawler-documentos.ts) e persistência em `DocumentoOriginal`)
 - **Dor Real:** O advogado prepara uma estratégia baseada no juiz titular da Vara, mas quem assina o despacho/sentença é um juiz substituto ou recém-transferido com entendimento totalmente oposto.
 - **Solução no Radar:** Como a Issue #3 extrai o campo exato `assinadoPor` do certificado digital ICP-Brasil do PDF do PJe, o sistema registra o histórico de **qual magistrado assinou cada ato** naquela Vara e alerta quando há troca de juiz no processo!

@@ -1,0 +1,9 @@
+{
+  "name": "Radar Jurídico & API de Publicações",
+  "short_name": "RadarJurídico",
+  "description": "Plataforma de Inteligência Jurídica, Monitoramento de Clientes, Detector de Concorrência e Auto-Gestão de Processos (CNJ / PJe / eproc / Datajud)",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#090d16",
+  "theme_color": "#4f46e5"
+}
