@@ -69,11 +69,11 @@ Este documento organiza todas as entregas do projeto em **Issues estruturadas** 
 As APIs tradicionais do mercado (Escavador, Digesto, Kurier, etc.) entregam basicamente o **feed bruto de publicações**. As issues abaixo transformam o **Radar Jurídico** em uma plataforma de **Inteligência Comercial, Jurimetria e Automação Real**:
 
 ### Issue #10: [Prospecção & Dossiê] Score de Oportunidade + Relatório Executivo de Auditoria da Concorrência
-- **Status:** 💡 Nova Ideia (Diferencial de Mercado)
+- **Status:** ✅ Concluído (`calcularScoreOportunidade` em [src/lib/auto-update.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/auto-update.ts) e badge `Score 0-100` nos cards)
 - **Objetivo:** Calcular um **Score de Oportunidade (0–100)** em processos de `ESCRITORIO_CONCORRENTE` e `SEM_ADVOGADO_CADASTRADO` (pontuando revelia, perda de prazo, bloqueio Sisbajud e citação sem defesa) e gerar um **Dossiê de Auditoria em PDF/Markdown** pronto para o sócio apresentar ao cliente.
 
 ### Issue #11: [Calendário Forense Real] Feriados por Tribunal, Recesso (Art. 220 CPC) e Exportação `.ics`
-- **Status:** 💡 Nova Ideia (Diferencial Técnico)
+- **Status:** ✅ Concluído ([src/lib/auto-update.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/auto-update.ts) + `GET /api/calendario/prazos.ics`)
 - **Objetivo:** Evoluir o `calcularPrazoFatal()` para considerar o **Recesso Forense (20/12 a 20/01)**, feriados nacionais/estaduais por tribunal e distinção automática entre **dias úteis (CPC/CLT)** e **dias corridos**, além de permitir baixar o prazo direto para o **Google Calendar / Outlook (`.ics`)**.
 
 ### Issue #12: [Jurimetria de Vara & Juiz] Perfil Decisório e Tempo Médio de Tramitação
@@ -81,7 +81,7 @@ As APIs tradicionais do mercado (Escavador, Digesto, Kurier, etc.) entregam basi
 - **Objetivo:** Cruzar os andamentos do Datajud (Issue #4) e decisões armazenadas no banco para calcular automaticamente o **tempo médio até a sentença**, taxa de **procedência vs. improcedência** e tendência de concessão de **liminares** por Vara/Magistrado.
 
 ### Issue #13: [Cockpit de Prazos] Kanban Operacional Auto-Gerido (Zero Cadastro Manual)
-- **Status:** 💡 Nova Ideia (Diferencial de Produtividade)
+- **Status:** ✅ Concluído (Aba `Cockpit Kanban` em [src/app/page.tsx](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/app/page.tsx))
 - **Objetivo:** Transformar os processos do banco em um painel **Kanban por urgência/prazo** (`Vence Hoje`, `Próximos 5 Dias`, `Sem Advogado / Citação`, `Concorrência Crítica`, `Concluído`) que move os cards automaticamente quando detecta peticionamento/movimentação nova no Datajud.
 
 ### Issue #14: [Radar CNPJ & Grupo Econômico] Busca Inteligente por Raiz de CNPJ e Variações de Nome
@@ -89,7 +89,7 @@ As APIs tradicionais do mercado (Escavador, Digesto, Kurier, etc.) entregam basi
 - **Objetivo:** Evitar perda de citações quando o autor escreve o nome do cliente errado (ex: `LG ELETRONICS`, `L.G. ELECTRONICS`, `LG DO BRASIL`). Normalizar pela **raiz do CNPJ (8 primeiros dígitos)** e disparar buscas paralelas por todas as `variacoes` cadastradas no `ClienteMonitorado`, deduplicando os resultados.
 
 ### Issue #15: [Copiloto de Petição] Pré-Minuta Automática a partir do PDF Extraído (Issue #3 + #8)
-- **Status:** 💡 Nova Ideia (Diferencial de IA Aplicada)
+- **Status:** ✅ Concluído (`gerarPreMinutaPeticao` em [src/lib/ia-juridica.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/ia-juridica.ts) + `POST /api/ia/minuta`)
 - **Objetivo:** Como o sistema já baixa o **inteiro teor assinado pelo juiz** (Issue #3) e analisa os riscos (Issue #8), adicionar um botão **"Gerar Pré-Minuta de Resposta"** (Contestação, Contrarrazões, Manifestação ou Impugnação ao Sisbajud) já endereçada ao juízo correto, com partes, número CNJ e pontos atacados.
 
 ---
@@ -181,7 +181,7 @@ As APIs tradicionais do mercado (Escavador, Digesto, Kurier, etc.) entregam basi
 - **Objetivo:** Detectar citações a Temas de Repercussão Geral / Recursos Repetitivos / IRDR no texto das decisões e alertar sobre pedidos de sobrestamento ou aplicação imediata de tese vinculante.
 
 ### Issue #34: [Cache & Fila Datajud] Proteção Anti-429 com Cache Inteligente de Movimentações
-- **Status:** 💡 Nova Ideia
+- **Status:** ✅ Concluído (`cacheDatajudMemoria` + persistência em [src/lib/datajud.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/datajud.ts))
 - **Objetivo:** Armazenar em cache no SQLite as consultas do Datajud por TTL configurável e enfileirar atualizações em lote para nunca sofrer bloqueio `429 Too Many Requests` da API pública do CNJ.
 
 ### Issue #35: [App Mobile PWA & Push] Aplicativo Instalável no Celular com Notificações Nativas
@@ -195,22 +195,22 @@ As APIs tradicionais do mercado (Escavador, Digesto, Kurier, etc.) entregam basi
 Mapeamento direto das dores mais graves relatadas por advogados e *controllers* no uso diário de sistemas como Loy Legal, Astrea, Projuris, Kurier, Escavador e Domicílio Judicial Eletrônico:
 
 ### Issue #36: [Anti-Multa Domicílio Judicial Eletrônico] Alerta de 3 Dias Úteis para Confirmação de Citação (Res. CNJ 455)
-- **Status:** 🔥 Crítico (Dor #1 Atual da Advocacia)
+- **Status:** ✅ Concluído (`calcularLimiteConfirmacaoDomicilio` em [src/lib/auto-update.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/auto-update.ts))
 - **Dor Real:** Empresas que não confirmam citação no Domicílio Judicial Eletrônico em **3 dias úteis** sofrem revelia e **multa de até 5% do valor da causa** por ato atentatório à dignidade da justiça.
 - **Solução no Radar:** Quando o detector identificar `Citação / Novo Processo` ou `SEM_ADVOGADO_CADASTRADO`, iniciar um **cronômetro regressivo de 72h / 3 dias úteis** com alerta vermelho máximo para confirmação imediata e habilitação nos autos antes da multa de 5%.
 
 ### Issue #37: [Filtro Anti-Ruído / Fadiga de Alerta] Separador Automático de "Mero Expediente" vs. "Prazo Fatal Real"
-- **Status:** 🔥 Crítico (Reclamação Clássica de Controladoria)
+- **Status:** ✅ Concluído (`detectarMeroExpediente` + filtro 1-clique na UI)
 - **Dor Real:** Softwares jogam centenas de intimações irrelevantes ("juntada de certidão", "autos conclusos", "mero expediente") na mesma fila de uma Sentença ou Bloqueio Sisbajud, causando fadiga e fazendo o advogado deixar passar um prazo fatal escondido no meio do lixo.
 - **Solução no Radar:** Classificador automático que silencia/arquiva em aba secundária os atos de `MERO_EXPEDIENTE` (sem prazo nem comando judicial) e mantém na caixa principal apenas atos que exigem ação humana.
 
 ### Issue #38: [Dupla Checagem & Prazo Interno D-2] Fluxo Controladoria → Advogado com Escalonamento Automático
-- **Status:** 🔥 Crítico ("Prazo de todos é prazo de ninguém")
+- **Status:** ✅ Concluído (`prazoInternoD2` calculado automaticamente em todo prazo fatal)
 - **Dor Real:** O jogo de empurra entre quem cadastrou a publicação (controladoria) e quem deveria peticionar (advogado), além do hábito de deixar para o último dia.
 - **Solução no Radar:** Todo prazo fatal gera automaticamente um **Prazo Interno de Revisão (D-2 dias úteis)**. Se o advogado responsável não marcar `"Minuta Pronta / Protocolado"` até o D-2, o sistema escalona um alerta automático para o Sócio/Controller.
 
 ### Issue #39: [Tradutor "Juridiquês → Cliente" Anti-Ansiedade] Mensagem Pronta de WhatsApp para o Cliente
-- **Status:** 💡 Desejo Muito Pedido no Reddit `r/direito`
+- **Status:** ✅ Concluído (`gerarMensagemWhatsAppCliente` + botão Copiar para WhatsApp na pasta do processo)
 - **Dor Real:** O cliente recebe push do Jusbrasil/Escavador dizendo *"Juntada de Petição"* ou *"Conclusos para Despacho"* e liga desesperado para o advogado perguntando o que aconteceu.
 - **Solução no Radar:** Botão **"Gerar Mensagem Tranquilizadora para Cliente (WhatsApp)"** que traduz o andamento técnico para linguagem simples e humana (ex: *"Olá! Seu processo teve apenas uma movimentação interna de rotina no cartório, segue tudo dentro do esperado e não há nenhuma ação necessária sua"*).
 
@@ -220,17 +220,17 @@ Mapeamento direto das dores mais graves relatadas por advogados e *controllers* 
 - **Solução no Radar:** Health-check automático que monitora a latência/queda dos portais PJe/eproc consultados, registra o horário exato da indisponibilidade no banco e aponta o link direto da página de certidões de indisponibilidade do respectivo tribunal.
 
 ### Issue #41: [Auditoria de OAB Omitida / Grafia Errada] Cruzamento Número CNJ x OAB Ausente na Publicação
-- **Status:** 🔥 Crítico (Falha Oculta dos Diários Oficiais)
+- **Status:** ✅ Concluído (integrado ao [src/lib/radar-worker.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/radar-worker.ts))
 - **Dor Real:** Às vezes a secretaria da Vara publica um despacho de um processo que **já é do nosso escritório**, mas esquece de cadastrar o nome/OAB do nosso advogado na intimação (ou digita o nome errado) — os softwares comuns que buscam só por OAB **perdem a publicação!**
 - **Solução no Radar:** Para todo processo já salvo na tabela `Processo` como `NOSSO_ESCRITORIO`, o worker (Issue #7) passa a monitorar também pelo **Número Único do Processo (`numeroProcesso`)**, garantindo captura mesmo se a secretaria omitir nossa OAB! (E ainda alerta: *"Nulidade de Intimação detectada — Art. 272 §5º CPC"*).
 
 ### Issue #42: [Baixa Automática de Prazo via Datajud] Detecção de Protocolo sem Preenchimento Manual
-- **Status:** 💡 Sonho dos Advogados no Reddit ("Cadastro manual é um pé no saco")
+- **Status:** ✅ Concluído (`protocoloRecenteDetectado` em [src/lib/datajud.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/datajud.ts) + botão Confirmar Baixa na UI)
 - **Dor Real:** O advogado já protocolou a petição no PJe, mas ainda precisa abrir o software jurídico, achar a tarefa, anexar o recibo e dar baixa manual.
 - **Solução no Radar:** O conector do Datajud (Issue #4) verifica se surgiu movimento `Petição (código TPU 85)` ou `Juntada` após a data da publicação e muda automaticamente o status do prazo para **"Protocolo Detectado no Tribunal — Confirmar Baixa"**.
 
 ### Issue #43: [Integração 1-Clique Google Sheets / Excel & Google Calendar] Modo Leve para Escritórios Ágeis
-- **Status:** 💡 Desejo Muito Citado no Reddit
+- **Status:** ✅ Concluído (`GET /api/exportar/csv` e `GET /api/calendario/prazos.ics`)
 - **Dor Real:** Muitos escritórios odeiam sistemas pesados/caros e preferem controlar a operação em **Google Sheets + Google Agenda**, mas sofrem alimentando a planilha na mão.
 - **Solução no Radar:** Endpoint `GET /api/exportar/csv` (compatível com `=IMPORTDATA()` ao vivo no Google Sheets!) e feed iCal (`GET /api/calendario/prazos.ics`) que sincroniza todos os prazos fatais direto no Google Agenda do celular sem precisar instalar nada.
 
@@ -245,7 +245,7 @@ Mapeamento direto das dores mais graves relatadas por advogados e *controllers* 
 - **Solução no Radar:** Ordenar o painel de prazos combinando **Dias até o Prazo Fatal × Valor Monetário Detectado (`R$`) × Risco (Revelia/Bloqueio)**, destacando no topo os processos de maior impacto financeiro.
 
 ### Issue #46: [Gerador Automático de Pedido de Devolução de Prazo / Nulidade (Art. 272 CPC)]
-- **Status:** 💡 Salva-Vidas Jurídico
+- **Status:** ✅ Concluído (`NULIDADE_ART_272_CPC` em `POST /api/ia/minuta`)
 - **Dor Real:** Quando o tribunal publica com erro de nome/OAB, link quebrado ou durante indisponibilidade, o advogado precisa peticionar rápido pedindo nulidade da intimação e devolução do prazo.
 - **Solução no Radar:** Botão 1-clique que gera a petição de **Devolução de Prazo por Falha na Intimação / Indisponibilidade**, já anexando o log técnico de auditoria do Radar (horário da tentativa, erro HTTP do tribunal ou divergência de OAB no JSON oficial do CNJ).
 
@@ -276,12 +276,12 @@ Mapeamento direto das dores mais graves relatadas por advogados e *controllers* 
 Varredura complementar das críticas de advogados em redes sociais e avaliações de plataformas (Astrea, Projuris, ADVBOX, EasyJur, Legalcloud, SAJ/PJe e Departamentos Jurídicos):
 
 ### Issue #51: [Escudo Anti-Golpe do Falso Advogado] Alerta Preventivo ao Cliente em Expedição de Alvará / RPV / Precatório
-- **Status:** 🔥 Crítico (Reclamação #1 de Advogados no Instagram e LinkedIn)
+- **Status:** ✅ Concluído (`detectarRiscoGolpeAlvara` + Código de Segurança Anti-Golpe no WhatsApp)
 - **Dor Real:** Quadrilhas monitoram publicações públicas de **Alvará / Precatório / RPV / Acordo** e chamam o cliente no WhatsApp fingindo ser o escritório, cobrando Pix de "taxa de liberação". O cliente cai no golpe e culpa o advogado real.
 - **Solução no Radar:** Assim que o detector identificar `alvará`, `precatório`, `RPV` ou `levantamento`, dispara alerta imediato e gera um **Aviso Oficial Anti-Golpe com Código de Segurança do Escritório** para enviar ao WhatsApp do cliente antes dos golpistas!
 
 ### Issue #52: [Rastreador de Honorários de Sucumbência & Contratuais] Carteira Automática de Recebíveis do Escritório
-- **Status:** 💡 Crítica #1 no B2B Stack / Capterra sobre Astrea e Legalcloud ("Financeiro desconectado do processo")
+- **Status:** ✅ Concluído (`extrairHonorariosSucumbencia` em [src/lib/auto-update.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/auto-update.ts))
 - **Dor Real:** O juiz fixa honorários de sucumbência na sentença (`10% a 20%`), mas o escritório esquece de lançar no financeiro ou perde o controle de quais processos já transitaram em julgado para executar os honorários.
 - **Solução no Radar:** Extrator específico que detecta percentuais e valores de **Honorários de Sucumbência** nas sentenças/acórdãos e alimenta automaticamente a aba **"Carteira de Honorários a Executar / Receber"**.
 
@@ -291,7 +291,7 @@ Varredura complementar das críticas de advogados em redes sociais e avaliaçõe
 - **Solução no Radar:** Rastreamento dedicado para processos em fase de `EXECUCAO_PENHORA`, alertando sobre resultado de ordens Sisbajud/Renajud, desbloqueios ou necessidade de manifestação sobre penhora.
 
 ### Issue #54: [Extrator Automático de Links de Audiência Virtual (Zoom / Teams / Cisco Webex / Google Meet)]
-- **Status:** 🔥 Crítico (Dor Diária de Advogados de Audiência nas Redes Sociais)
+- **Status:** ✅ Concluído (`extrairLinkAudienciaVirtual` + botão Entrar na Audiência Virtual na pasta do processo)
 - **Dor Real:** Na hora da audiência telepresencial, o advogado fica desesperado caçando no meio de dezenas de despachos antigos onde está o link do Zoom/Teams/Meet da Vara ou o ID da sala.
 - **Solução no Radar:** Regex especializado que extrai qualquer URL de videoconferência (`zoom.us`, `teams.microsoft.com`, `meet.google.com`, `webex.com`, `pje.jus.br/audiencia`) de dentro das publicações/PDFs e fixa um botão **"Entrar na Sala de Audiência Virtual"** no topo da pasta do processo!
 
@@ -326,7 +326,7 @@ Varredura complementar das críticas de advogados em redes sociais e avaliaçõe
 - **Solução no Radar:** Botão **"Gerar Link Temporário de Diligência para Correspondente"**, que compartilha apenas a pasta daquele processo (com PDFs extraídos e ata) com validade de 48h, sem dar acesso ao resto do sistema.
 
 ### Issue #61: [Detector de Trânsito em Julgado & Alerta de Baixa/Arquivamento]
-- **Status:** 💡 Limpeza de Base e Redução de Custos
+- **Status:** ✅ Concluído (`detectarTransitoEmJulgado` em [src/lib/auto-update.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/auto-update.ts))
 - **Dor Real:** Escritórios e empresas mantêm milhares de processos "mortos" ativos na base (pagando monitoramento por processo em softwares tradicionais) porque ninguém deu baixa após o trânsito em julgado.
 - **Solução no Radar:** Detecção automática de `Certidão de Trânsito em Julgado` ou `Arquivamento Definitivo` (código TPU Datajud 246 / 848), movendo o processo para `ENCERRADO` e disparando gatilho final de cobrança de honorários.
 
@@ -336,12 +336,12 @@ Varredura complementar das críticas de advogados em redes sociais e avaliaçõe
 - **Solução no Radar:** Respeito ao flag `nivelSigilo` do Datajud e opção **"Exportar Relatório com Anonimização LGPD"** (mascarando CPFs e nomes de pessoas físicas automaticamente).
 
 ### Issue #63: [Checklist de Sustentação Oral & Pauta de Julgamento nos Tribunais (2º Grau / TRFs / TRTs / TJs)]
-- **Status:** 💡 Dor Crítica de Advogados de 2ª Instância e Tribunais Superiores
+- **Status:** ✅ Concluído (`detectarPautaJulgamento2Grau` em [src/lib/auto-update.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/auto-update.ts))
 - **Dor Real:** Publicações de **"Inclusão em Pauta de Julgamento"** costumam ter prazo curtíssimo (às vezes 48h ou 5 dias antes da sessão) para inscrição de sustentação oral e envio de memoriais aos desembargadores.
 - **Solução no Radar:** Alerta especial `PAUTA_DE_JULGAMENTO_2_GRAU` sempre que a publicação vier de Turma/Câmara/Seção, destacando a data da sessão, o Desembargador Relator e o prazo limite para inscrição de sustentação oral.
 
 ### Issue #64: [Detecção de Intimação de Perícia & Controle de Adiantamento de Honorários Periciais / Assistente Técnico]
-- **Status:** 💡 Gargalo Clássico em Trabalhista e Cível
+- **Status:** ✅ Concluído (`gerarChecklistPericia` em [src/lib/auto-update.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/auto-update.ts))
 - **Dor Real:** O juiz nomeia perito e abre prazo comum de 5 ou 15 dias para **indicar Assistente Técnico e apresentar Quesitos**. Se o escritório perde esse prazo, o cliente vai para a perícia técnica/médica sem assistente e perde a prova principal do processo!
 - **Solução no Radar:** Quando a fase for `PERICIA`, abrir checklist obrigatório de 3 itens na pasta: `1. Indicar Assistente Técnico`, `2. Protocolar Quesitos`, `3. Agendar Data/Local da Vistoria com o Cliente`.
 

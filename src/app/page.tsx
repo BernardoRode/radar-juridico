@@ -31,7 +31,12 @@ import {
 import type { AnaliseIAJuridica } from '@/lib/ia-juridica';
 
 type ModoBusca = 'RADAR_CLIENTE' | 'OAB_ADVOGADO' | 'PROCESSO_DIRETO' | 'INSPETOR_LINKS';
-type AbaVisualizacao = 'PROCESSOS_AUTO' | 'FEED_PUBLICACOES' | 'BANCO_CONFIG' | 'API_DOCS';
+type AbaVisualizacao =
+  | 'PROCESSOS_AUTO'
+  | 'COCKPIT_KANBAN'
+  | 'FEED_PUBLICACOES'
+  | 'BANCO_CONFIG'
+  | 'API_DOCS';
 
 export default function RadarJuridicoHome() {
   const [modoBusca, setModoBusca] = useState<ModoBusca>('RADAR_CLIENTE');
@@ -96,6 +101,48 @@ export default function RadarJuridicoHome() {
   const [analiseIAPorProcesso, setAnaliseIAPorProcesso] = useState<
     Record<string, AnaliseIAJuridica>
   >({});
+  const [ocultarMeroExpediente, setOcultarMeroExpediente] = useState(false);
+  const [copiadoWhatsApp, setCopiadoWhatsApp] = useState(false);
+  const [processosConcluidos, setProcessosConcluidos] = useState<Record<string, boolean>>({});
+  const [gerandoMinuta, setGerandoMinuta] = useState(false);
+  const [minutaPorProcesso, setMinutaPorProcesso] = useState<
+    Record<string, { tituloPeca: string; minutaTexto: string }>
+  >({});
+
+  async function gerarMinutaDoProcesso(
+    proc: ProcessoAutoGerido,
+    tipoMinuta: 'RESPOSTA_AUTOMATICA' | 'NULIDADE_ART_272_CPC'
+  ) {
+    setGerandoMinuta(true);
+    try {
+      const ultimaPub = proc.historicoPublicacoes[0];
+      const res = await fetch('/api/ia/minuta', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          numeroProcesso: proc.numeroFormatado,
+          tribunal: proc.siglaTribunal,
+          orgaoJulgador: proc.orgaoJulgador,
+          partes: proc.partes.map((p) => p.nome),
+          tipoAtoDetectado: proc.ultimoStatusDetectado,
+          textoPublicacao: ultimaPub?.texto || '',
+          tipoMinuta,
+        }),
+      });
+      const json = await res.json();
+      if (json.sucesso) {
+        setMinutaPorProcesso((prev) => ({
+          ...prev,
+          [proc.numeroProcesso]: {
+            tituloPeca: json.tituloPeca,
+            minutaTexto: json.minutaTexto,
+          },
+        }));
+      }
+    } finally {
+      setGerandoMinuta(false);
+    }
+  }
 
   async function analisarProcessoComIA(proc: ProcessoAutoGerido) {
     const ultimaPub = proc.historicoPublicacoes[0];
@@ -407,6 +454,17 @@ export default function RadarJuridicoHome() {
             >
               <Sparkles className="w-3.5 h-3.5" />
               Pastas Auto-Atualizadas ({processos.length})
+            </button>
+            <button
+              onClick={() => setAbaAtiva('COCKPIT_KANBAN')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 ${
+                abaAtiva === 'COCKPIT_KANBAN'
+                  ? 'bg-indigo-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Clock className="w-3.5 h-3.5" />
+              Cockpit Kanban
             </button>
             <button
               onClick={() => setAbaAtiva('FEED_PUBLICACOES')}
@@ -928,21 +986,32 @@ export default function RadarJuridicoHome() {
           <section className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Lista de Processos à Esquerda */}
             <div className="lg:col-span-5 space-y-3">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-sm font-bold text-slate-200 flex items-center gap-2">
                   <Sparkles className="w-4 h-4 text-indigo-400" />
                   Processos Auto-Cadastrados ({processos.length})
                 </h2>
-                {endpointGerado && (
-                  <a
-                    href={endpointGerado}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-[11px] text-indigo-400 hover:underline flex items-center gap-1"
-                  >
-                    Ver JSON da API <ExternalLink className="w-3 h-3" />
-                  </a>
-                )}
+                <div className="flex items-center gap-3">
+                  <label className="flex items-center gap-1.5 text-[11px] text-slate-300 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={ocultarMeroExpediente}
+                      onChange={(e) => setOcultarMeroExpediente(e.target.checked)}
+                      className="rounded border-slate-700 bg-slate-900 text-indigo-600"
+                    />
+                    Ocultar Mero Expediente
+                  </label>
+                  {endpointGerado && (
+                    <a
+                      href={endpointGerado}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-[11px] text-indigo-400 hover:underline flex items-center gap-1"
+                    >
+                      JSON <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
               </div>
 
               {processos.length === 0 ? (
@@ -957,7 +1026,9 @@ export default function RadarJuridicoHome() {
                 </div>
               ) : (
                 <div className="space-y-2.5 max-h-[680px] overflow-y-auto pr-1">
-                  {processos.map((proc) => {
+                  {processos
+                    .filter((p) => (!ocultarMeroExpediente ? true : !p.ehMeroExpediente))
+                    .map((proc) => {
                     const ativo =
                       processoSelecionado?.numeroProcesso === proc.numeroProcesso;
                     return (
@@ -971,9 +1042,16 @@ export default function RadarJuridicoHome() {
                         }`}
                       >
                         <div className="flex items-center justify-between gap-2 mb-1.5">
-                          <span className="px-2 py-0.5 rounded bg-slate-800 text-indigo-300 font-bold text-[11px]">
-                            {proc.siglaTribunal}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="px-2 py-0.5 rounded bg-slate-800 text-indigo-300 font-bold text-[11px]">
+                              {proc.siglaTribunal}
+                            </span>
+                            {typeof proc.scoreOportunidade === 'number' && (
+                              <span className="px-1.5 py-0.5 rounded bg-cyan-500/15 text-cyan-300 border border-cyan-500/30 font-mono text-[10px] font-bold">
+                                Score {proc.scoreOportunidade}
+                              </span>
+                            )}
+                          </div>
                           {proc.statusConcorrencia === 'NOSSO_ESCRITORIO' && (
                             <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[10px] font-semibold">
                               Nosso Escritório
@@ -1059,9 +1137,147 @@ export default function RadarJuridicoHome() {
                             Prazo Fatal: {processoSelecionado.prazoFatal}
                           </span>
                         )}
+                        {processoSelecionado.prazoInternoD2 && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-semibold">
+                            Revisão D-2: {processoSelecionado.prazoInternoD2}
+                          </span>
+                        )}
+                        {processoSelecionado.prazoFatal && (
+                          <a
+                            href={`/api/calendario/prazos.ics?numeroProcesso=${encodeURIComponent(
+                              processoSelecionado.numeroFormatado
+                            )}&prazoFatal=${encodeURIComponent(
+                              processoSelecionado.prazoFatal
+                            )}&tribunal=${encodeURIComponent(
+                              processoSelecionado.siglaTribunal
+                            )}&ato=${encodeURIComponent(
+                              processoSelecionado.ultimoStatusDetectado
+                            )}`}
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-xs font-semibold transition"
+                          >
+                            <Download className="w-3 h-3" /> Agenda (.ics)
+                          </a>
+                        )}
                       </div>
                     </div>
                   </div>
+
+                  {/* Alerta Crítico Anti-Multa Domicílio Judicial Eletrônico (Issue #36) */}
+                  {processoSelecionado.limiteConfirmacaoDomicilio3Dias && (
+                    <div className="p-3.5 rounded-xl bg-rose-500/15 border border-rose-500/40 flex flex-wrap items-center justify-between gap-2 text-xs text-rose-200">
+                      <div className="flex items-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-rose-400 shrink-0" />
+                        <span>
+                          <strong>Domicílio Judicial Eletrônico (Res. CNJ 455):</strong> Confirmar citação em até 3 dias úteis (limite:{' '}
+                          <strong className="underline">{processoSelecionado.limiteConfirmacaoDomicilio3Dias}</strong>) para evitar revelia e <strong>multa de até 5% do valor da causa</strong>.
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Botão Sala de Audiência Virtual (Issue #54) */}
+                  {processoSelecionado.linkAudienciaVirtual && (
+                    <div className="p-3.5 rounded-xl bg-emerald-500/15 border border-emerald-500/40 flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <span className="text-emerald-200 font-medium">
+                        🎥 Sala de Audiência Telepresencial detectada automaticamente no despacho!
+                      </span>
+                      <a
+                        href={processoSelecionado.linkAudienciaVirtual}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold flex items-center gap-1.5"
+                      >
+                        Entrar na Audiência Virtual <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
+                  )}
+
+                  {/* Alertas Especiais: Honorários (#52), Trânsito em Julgado (#61), Pauta 2º Grau (#63) e Perícia (#64) */}
+                  {(processoSelecionado.honorariosDetectados ||
+                    processoSelecionado.transitoEmJulgado ||
+                    processoSelecionado.pautaJulgamento2Grau ||
+                    processoSelecionado.checklistPericia) && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+                      {processoSelecionado.honorariosDetectados && (
+                        <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-200">
+                          <span className="font-bold text-emerald-300 block">
+                            💰 Honorários de Sucumbência Detectados (Issue #52)
+                          </span>
+                          <span>Fixados em: {processoSelecionado.honorariosDetectados}</span>
+                        </div>
+                      )}
+                      {processoSelecionado.transitoEmJulgado && (
+                        <div className="p-3 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-200">
+                          <span className="font-bold text-cyan-300 block">
+                            🏁 Trânsito em Julgado / Arquivamento (Issue #61)
+                          </span>
+                          <span>Apto para baixa de monitoramento ou execução de honorários.</span>
+                        </div>
+                      )}
+                      {processoSelecionado.pautaJulgamento2Grau && (
+                        <div className="p-3 rounded-xl bg-amber-500/15 border border-amber-500/40 text-amber-200">
+                          <span className="font-bold text-amber-300 block">
+                            🏛️ Pauta de Julgamento 2º Grau / Sustentação Oral (Issue #63)
+                          </span>
+                          <span>Verificar prazo de inscrição para sustentação oral e envio de memoriais!</span>
+                        </div>
+                      )}
+                      {processoSelecionado.checklistPericia && (
+                        <div className="p-3 rounded-xl bg-indigo-500/15 border border-indigo-500/40 text-indigo-200 sm:col-span-2">
+                          <span className="font-bold text-indigo-300 block mb-1">
+                            🔬 Checklist Obrigatório de Perícia (Issue #64)
+                          </span>
+                          <ul className="space-y-1">
+                            {processoSelecionado.checklistPericia.map((item, idx) => (
+                              <li key={idx} className="flex items-center gap-2">
+                                <input type="checkbox" className="rounded bg-slate-900 border-slate-700" />
+                                <span>{item}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Tradutor Juridiquês -> WhatsApp do Cliente + Escudo Anti-Golpe (Issue #39 + #51) */}
+                  {processoSelecionado.mensagemClienteWhatsApp && (
+                    <div
+                      className={`p-4 rounded-xl border space-y-2 text-xs ${
+                        processoSelecionado.riscoGolpeAlvara
+                          ? 'bg-amber-500/15 border-amber-500/40'
+                          : 'bg-slate-950/80 border-slate-800'
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-bold text-slate-200 flex items-center gap-1.5">
+                          {processoSelecionado.riscoGolpeAlvara ? (
+                            <span className="text-amber-300">
+                              🛡️ Escudo Anti-Golpe do Falso Advogado (Alvará / RPV Detectado)
+                            </span>
+                          ) : (
+                            <span>💬 Mensagem Pronta para o WhatsApp do Cliente (Sem Juridiquês)</span>
+                          )}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(
+                              processoSelecionado.mensagemClienteWhatsApp || ''
+                            );
+                            setCopiadoWhatsApp(true);
+                            setTimeout(() => setCopiadoWhatsApp(false), 2000);
+                          }}
+                          className="px-3 py-1 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold text-[11px] cursor-pointer"
+                        >
+                          {copiadoWhatsApp ? 'Copiado!' : 'Copiar para WhatsApp'}
+                        </button>
+                      </div>
+                      <pre className="whitespace-pre-wrap font-sans text-slate-300 bg-slate-900/80 p-3 rounded-lg border border-slate-800">
+                        {processoSelecionado.mensagemClienteWhatsApp}
+                      </pre>
+                    </div>
+                  )}
 
                   {/* Partes e Advogados Identificados (Radar de Concorrência) */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -1282,6 +1498,26 @@ export default function RadarJuridicoHome() {
                             </div>
                           </div>
 
+                          {dj.protocoloRecenteDetectado && (
+                            <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/40 flex flex-wrap items-center justify-between gap-2 text-emerald-200">
+                              <span>
+                                ✅ <strong>Baixa Automática (Issue #42):</strong> Protocolo detectado no Datajud ({dj.protocoloRecenteDetectado})!
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setProcessosConcluidos((prev) => ({
+                                    ...prev,
+                                    [processoSelecionado.numeroProcesso]: true,
+                                  }))
+                                }
+                                className="px-3 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-[11px] cursor-pointer"
+                              >
+                                Confirmar Baixa do Prazo
+                              </button>
+                            </div>
+                          )}
+
                           {dj.assuntos.length > 0 && (
                             <div className="flex flex-wrap gap-1.5">
                               {dj.assuntos.map((a, idx) => (
@@ -1336,26 +1572,74 @@ export default function RadarJuridicoHome() {
                         <Sparkles className="w-3.5 h-3.5" />
                         IA Jurídica — Resumo &amp; Auditoria da Concorrência
                       </h4>
-                      <button
-                        type="button"
-                        disabled={analisandoIA}
-                        onClick={() => analisarProcessoComIA(processoSelecionado)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600/25 hover:bg-purple-600/35 disabled:opacity-50 border border-purple-500/40 text-purple-200 text-xs font-medium transition cursor-pointer"
-                      >
-                        {analisandoIA ? (
-                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                        ) : (
-                          <Sparkles className="w-3.5 h-3.5" />
-                        )}
-                        <span>
-                          {analisandoIA
-                            ? 'Analisando...'
-                            : analiseIAPorProcesso[processoSelecionado.numeroProcesso]
-                            ? 'Reanalisar com IA'
-                            : 'Gerar Resumo & Auditoria IA'}
-                        </span>
-                      </button>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          disabled={analisandoIA}
+                          onClick={() => analisarProcessoComIA(processoSelecionado)}
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600/25 hover:bg-purple-600/35 disabled:opacity-50 border border-purple-500/40 text-purple-200 text-xs font-medium transition cursor-pointer"
+                        >
+                          {analisandoIA ? (
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Sparkles className="w-3.5 h-3.5" />
+                          )}
+                          <span>
+                            {analisandoIA
+                              ? 'Analisando...'
+                              : analiseIAPorProcesso[processoSelecionado.numeroProcesso]
+                              ? 'Reanalisar com IA'
+                              : 'Resumo & Auditoria IA'}
+                          </span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={gerandoMinuta}
+                          onClick={() =>
+                            gerarMinutaDoProcesso(processoSelecionado, 'RESPOSTA_AUTOMATICA')
+                          }
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/25 hover:bg-indigo-600/35 disabled:opacity-50 border border-indigo-500/40 text-indigo-200 text-xs font-medium transition cursor-pointer"
+                        >
+                          <FileText className="w-3.5 h-3.5" />
+                          <span>Pré-Minuta de Resposta (#15)</span>
+                        </button>
+                        <button
+                          type="button"
+                          disabled={gerandoMinuta}
+                          onClick={() =>
+                            gerarMinutaDoProcesso(processoSelecionado, 'NULIDADE_ART_272_CPC')
+                          }
+                          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-600/20 hover:bg-rose-600/30 disabled:opacity-50 border border-rose-500/40 text-rose-200 text-xs font-medium transition cursor-pointer"
+                        >
+                          <ShieldAlert className="w-3.5 h-3.5" />
+                          <span>Devolução de Prazo Art. 272 (#46)</span>
+                        </button>
+                      </div>
                     </div>
+
+                    {minutaPorProcesso[processoSelecionado.numeroProcesso] && (
+                      <div className="space-y-2 text-xs bg-slate-950 p-4 rounded-xl border border-indigo-500/40">
+                        <div className="flex items-center justify-between">
+                          <span className="font-bold text-indigo-300">
+                            📄 {minutaPorProcesso[processoSelecionado.numeroProcesso].tituloPeca}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              navigator.clipboard.writeText(
+                                minutaPorProcesso[processoSelecionado.numeroProcesso].minutaTexto
+                              )
+                            }
+                            className="px-2.5 py-1 rounded bg-indigo-600 hover:bg-indigo-500 text-white text-[11px] font-semibold cursor-pointer"
+                          >
+                            Copiar Petição
+                          </button>
+                        </div>
+                        <pre className="whitespace-pre-wrap font-mono text-[11px] text-slate-200 bg-slate-900 p-3 rounded-lg border border-slate-800 max-h-64 overflow-y-auto">
+                          {minutaPorProcesso[processoSelecionado.numeroProcesso].minutaTexto}
+                        </pre>
+                      </div>
+                    )}
 
                     {analiseIAPorProcesso[processoSelecionado.numeroProcesso] && (() => {
                       const ia = analiseIAPorProcesso[processoSelecionado.numeroProcesso];
@@ -1444,6 +1728,117 @@ export default function RadarJuridicoHome() {
                 </div>
               )}
             </div>
+          </section>
+        )}
+
+        {/* CONTEÚDO DA ABA: COCKPIT KANBAN DE PRAZOS (ISSUE #13 + #42) */}
+        {abaAtiva === 'COCKPIT_KANBAN' && (
+          <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {[
+              {
+                titulo: '🔥 Críticos & Citações (Res. 455)',
+                cor: 'border-rose-500/40',
+                itens: processos.filter(
+                  (p) =>
+                    !processosConcluidos[p.numeroProcesso] &&
+                    (p.urgenciaMaxima === 'ALTA' ||
+                      p.statusConcorrencia === 'SEM_ADVOGADO_CADASTRADO')
+                ),
+              },
+              {
+                titulo: '⏳ Prazos em Curso (Revisão D-2)',
+                cor: 'border-amber-500/40',
+                itens: processos.filter(
+                  (p) =>
+                    !processosConcluidos[p.numeroProcesso] &&
+                    p.urgenciaMaxima !== 'ALTA' &&
+                    p.statusConcorrencia === 'NOSSO_ESCRITORIO'
+                ),
+              },
+              {
+                titulo: '🕵️ Concorrência em Auditoria',
+                cor: 'border-purple-500/40',
+                itens: processos.filter(
+                  (p) =>
+                    !processosConcluidos[p.numeroProcesso] &&
+                    p.urgenciaMaxima !== 'ALTA' &&
+                    p.statusConcorrencia === 'ESCRITORIO_CONCORRENTE'
+                ),
+              },
+              {
+                titulo: '✅ Conferidos / Protocolados',
+                cor: 'border-emerald-500/40',
+                itens: processos.filter((p) => !!processosConcluidos[p.numeroProcesso]),
+              },
+            ].map((col, idx) => (
+              <div
+                key={idx}
+                className={`bg-[#0f1628] border ${col.cor} rounded-2xl p-4 space-y-3`}
+              >
+                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
+                  <h3 className="text-xs font-bold text-white">{col.titulo}</h3>
+                  <span className="px-2 py-0.5 rounded-full bg-slate-900 text-slate-300 text-[11px] font-bold">
+                    {col.itens.length}
+                  </span>
+                </div>
+                <div className="space-y-2.5 max-h-[560px] overflow-y-auto">
+                  {col.itens.length === 0 ? (
+                    <p className="text-xs text-slate-500 py-4 text-center">
+                      Nenhum processo nesta coluna.
+                    </p>
+                  ) : (
+                    col.itens.map((proc) => (
+                      <div
+                        key={proc.numeroProcesso}
+                        className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2 text-xs"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="px-1.5 py-0.5 rounded bg-slate-800 text-indigo-300 font-bold text-[10px]">
+                            {proc.siglaTribunal}
+                          </span>
+                          {typeof proc.scoreOportunidade === 'number' && (
+                            <span className="text-[10px] font-mono text-cyan-300 font-bold">
+                              Score {proc.scoreOportunidade}
+                            </span>
+                          )}
+                        </div>
+                        <p
+                          onClick={() => {
+                            setProcessoSelecionado(proc);
+                            setAbaAtiva('PROCESSOS_AUTO');
+                          }}
+                          className="font-mono font-bold text-white hover:text-indigo-400 cursor-pointer"
+                        >
+                          {proc.numeroFormatado}
+                        </p>
+                        <p className="text-[11px] text-slate-300">{proc.ultimoStatusDetectado}</p>
+                        {proc.prazoFatal && (
+                          <p className="text-[11px] text-rose-300 font-mono">
+                            Fatal: {proc.prazoFatal} (D-2: {proc.prazoInternoD2})
+                          </p>
+                        )}
+                        <div className="pt-1 flex justify-end">
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setProcessosConcluidos((prev) => ({
+                                ...prev,
+                                [proc.numeroProcesso]: !prev[proc.numeroProcesso],
+                              }))
+                            }
+                            className="px-2.5 py-1 rounded bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-[10px] font-semibold cursor-pointer"
+                          >
+                            {processosConcluidos[proc.numeroProcesso]
+                              ? 'Reabrir Prazo'
+                              : '✓ Marcar Protocolado'}
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            ))}
           </section>
         )}
 
@@ -1787,18 +2182,32 @@ export default function RadarJuridicoHome() {
 
             {/* Processos Persistidos no Banco */}
             <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-4">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <h2 className="text-sm font-bold text-white flex items-center gap-2">
                   <Database className="w-4 h-4 text-cyan-400" />
                   Processos Persistidos Automaticamente no Banco ({processosDb.length})
                 </h2>
-                <button
-                  type="button"
-                  onClick={carregarBancoEConfig}
-                  className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs text-slate-300 flex items-center gap-1.5 cursor-pointer"
-                >
-                  <RefreshCw className="w-3.5 h-3.5" /> Atualizar
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <a
+                    href="/api/exportar/csv"
+                    className="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-xs text-emerald-200 flex items-center gap-1.5"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Planilha CSV / Sheets
+                  </a>
+                  <a
+                    href="/api/calendario/prazos.ics"
+                    className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-xs text-indigo-200 flex items-center gap-1.5"
+                  >
+                    <Clock className="w-3.5 h-3.5" /> Todos os Prazos (.ics)
+                  </a>
+                  <button
+                    type="button"
+                    onClick={carregarBancoEConfig}
+                    className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs text-slate-300 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> Atualizar
+                  </button>
+                </div>
               </div>
 
               {processosDb.length === 0 ? (

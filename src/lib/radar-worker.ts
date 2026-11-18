@@ -122,6 +122,31 @@ export async function executarVarreduraRadar(
       }
     }
 
+    // 3. Issue #41: Varre também pelo Número Único dos processos já vinculados ao Nosso Escritório
+    // para blindar contra publicações em que a Secretaria da Vara esquece de cadastrar nossa OAB!
+    const processosNossos = await prisma.processo.findMany({
+      where: { statusConcorrencia: 'NOSSO_ESCRITORIO' },
+      select: { numeroProcesso: true },
+      take: 25,
+    });
+    for (const procNosso of processosNossos) {
+      try {
+        const p = new URLSearchParams({
+          numeroProcesso: procNosso.numeroProcesso,
+          dataDisponibilizacaoInicio: inicio,
+          dataDisponibilizacaoFim: hoje,
+          pagina: '1',
+          itensPorPagina: '10',
+        });
+        const itens = await consultarCnj(p);
+        for (const item of itens) {
+          if (item.id) todasComunicacoes.set(item.id, item);
+        }
+      } catch {
+        // Continua silenciosamente
+      }
+    }
+
     const enriquecidas = Array.from(todasComunicacoes.values()).map((c) =>
       enriquecerComunicacao(c, nossasOabs)
     );

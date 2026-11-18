@@ -5,8 +5,18 @@ import {
   PublicacaoEnriquecida,
 } from '@/types/juridico';
 import {
+  calcularLimiteConfirmacaoDomicilio,
   calcularPrazoFatal,
+  calcularScoreOportunidade,
   classificarFaseProcessual,
+  detectarMeroExpediente,
+  detectarPautaJulgamento2Grau,
+  detectarRiscoGolpeAlvara,
+  detectarTransitoEmJulgado,
+  extrairHonorariosSucumbencia,
+  extrairLinkAudienciaVirtual,
+  gerarChecklistPericia,
+  gerarMensagemWhatsAppCliente,
   LABEL_FASE_PROCESSUAL,
 } from '@/lib/auto-update';
 
@@ -69,7 +79,8 @@ export function extrairLinksValidacao(
 export function extrairAlertasTexto(
   texto: string,
   tipoComunicacao?: string,
-  dataDisponibilizacao?: string
+  dataDisponibilizacao?: string,
+  siglaTribunal?: string
 ): AnaliseInteligencia['alertasAutomaticos'] {
   const t = (texto || '').toLowerCase();
 
@@ -119,15 +130,39 @@ export function extrairAlertasTexto(
 
   const faseCodigo = classificarFaseProcessual(texto, tipoComunicacao);
   const faseProcessual = LABEL_FASE_PROCESSUAL[faseCodigo];
-  const calculoPrazo = calcularPrazoFatal(dataDisponibilizacao, prazoDetectado);
+  const calculoPrazo = calcularPrazoFatal(
+    dataDisponibilizacao,
+    prazoDetectado,
+    siglaTribunal
+  );
+  const linkAudienciaVirtual = extrairLinkAudienciaVirtual(texto);
+  const honorariosDetectados = extrairHonorariosSucumbencia(texto);
+  const ehMeroExpediente = detectarMeroExpediente(texto, urgencia, prazoDetectado);
+  const riscoGolpeAlvara = detectarRiscoGolpeAlvara(texto);
+  const transitoEmJulgado = detectarTransitoEmJulgado(texto);
+  const pautaJulgamento2Grau = detectarPautaJulgamento2Grau(texto, tipoComunicacao);
+  const checklistPericia = gerarChecklistPericia(faseCodigo);
+  const limiteConfirmacaoDomicilio3Dias =
+    faseCodigo === 'CITACAO'
+      ? calcularLimiteConfirmacaoDomicilio(dataDisponibilizacao, siglaTribunal)
+      : undefined;
 
   return {
     tipoAtoDetectado,
     faseProcessual,
     prazoDetectado,
     prazoFatal: calculoPrazo?.dataFatalFormatada,
+    prazoInternoD2: calculoPrazo?.prazoInternoD2Formatado,
+    limiteConfirmacaoDomicilio3Dias,
     audienciaDetectada,
+    linkAudienciaVirtual,
     valorDetectado,
+    honorariosDetectados,
+    ehMeroExpediente,
+    riscoGolpeAlvara,
+    transitoEmJulgado,
+    pautaJulgamento2Grau,
+    checklistPericia,
     urgencia,
   };
 }
@@ -177,8 +212,19 @@ export function enriquecerComunicacao(
   const alertasAutomaticos = extrairAlertasTexto(
     com.texto,
     com.tipoComunicacao,
-    com.data_disponibilizacao
+    com.data_disponibilizacao,
+    com.siglaTribunal
   );
+  if (
+    statusConcorrencia === 'SEM_ADVOGADO_CADASTRADO' &&
+    !alertasAutomaticos.limiteConfirmacaoDomicilio3Dias
+  ) {
+    alertasAutomaticos.limiteConfirmacaoDomicilio3Dias =
+      calcularLimiteConfirmacaoDomicilio(
+        com.data_disponibilizacao,
+        com.siglaTribunal
+      );
+  }
 
   return {
     ...com,
@@ -219,6 +265,16 @@ export function consolidarProcessosAutomaticamente(
         ultimoStatusDetectado: pub.inteligencia.alertasAutomaticos.tipoAtoDetectado,
         faseProcessual: pub.inteligencia.alertasAutomaticos.faseProcessual,
         prazoFatal: pub.inteligencia.alertasAutomaticos.prazoFatal,
+        prazoInternoD2: pub.inteligencia.alertasAutomaticos.prazoInternoD2,
+        limiteConfirmacaoDomicilio3Dias:
+          pub.inteligencia.alertasAutomaticos.limiteConfirmacaoDomicilio3Dias,
+        linkAudienciaVirtual: pub.inteligencia.alertasAutomaticos.linkAudienciaVirtual,
+        honorariosDetectados: pub.inteligencia.alertasAutomaticos.honorariosDetectados,
+        ehMeroExpediente: pub.inteligencia.alertasAutomaticos.ehMeroExpediente,
+        riscoGolpeAlvara: pub.inteligencia.alertasAutomaticos.riscoGolpeAlvara,
+        transitoEmJulgado: pub.inteligencia.alertasAutomaticos.transitoEmJulgado,
+        pautaJulgamento2Grau: pub.inteligencia.alertasAutomaticos.pautaJulgamento2Grau,
+        checklistPericia: pub.inteligencia.alertasAutomaticos.checklistPericia,
         urgenciaMaxima: pub.inteligencia.alertasAutomaticos.urgencia,
         totalPublicacoes: 1,
         linksDocumentosOriginais: [...pub.inteligencia.linksValidacao],
@@ -262,6 +318,28 @@ export function consolidarProcessosAutomaticamente(
 
       if (!existente.prazoFatal && pub.inteligencia.alertasAutomaticos.prazoFatal) {
         existente.prazoFatal = pub.inteligencia.alertasAutomaticos.prazoFatal;
+        existente.prazoInternoD2 = pub.inteligencia.alertasAutomaticos.prazoInternoD2;
+      }
+      if (!existente.linkAudienciaVirtual && pub.inteligencia.alertasAutomaticos.linkAudienciaVirtual) {
+        existente.linkAudienciaVirtual = pub.inteligencia.alertasAutomaticos.linkAudienciaVirtual;
+      }
+      if (pub.inteligencia.alertasAutomaticos.riscoGolpeAlvara) {
+        existente.riscoGolpeAlvara = true;
+      }
+      if (!existente.honorariosDetectados && pub.inteligencia.alertasAutomaticos.honorariosDetectados) {
+        existente.honorariosDetectados = pub.inteligencia.alertasAutomaticos.honorariosDetectados;
+      }
+      if (pub.inteligencia.alertasAutomaticos.transitoEmJulgado) {
+        existente.transitoEmJulgado = true;
+      }
+      if (pub.inteligencia.alertasAutomaticos.pautaJulgamento2Grau) {
+        existente.pautaJulgamento2Grau = true;
+      }
+      if (!existente.checklistPericia && pub.inteligencia.alertasAutomaticos.checklistPericia) {
+        existente.checklistPericia = pub.inteligencia.alertasAutomaticos.checklistPericia;
+      }
+      if (!pub.inteligencia.alertasAutomaticos.ehMeroExpediente) {
+        existente.ehMeroExpediente = false;
       }
       if (pub.inteligencia.alertasAutomaticos.faseProcessual && existente.faseProcessual === 'Andamento / Despacho') {
         existente.faseProcessual = pub.inteligencia.alertasAutomaticos.faseProcessual;
@@ -269,5 +347,30 @@ export function consolidarProcessosAutomaticamente(
     }
   }
 
-  return Array.from(mapa.values());
+  const listaProcessos = Array.from(mapa.values());
+
+  for (const proc of listaProcessos) {
+    const textoConcatenado = proc.historicoPublicacoes.map((p) => p.texto).join('\n');
+    const temValorMonetario = proc.historicoPublicacoes.some(
+      (p) => !!p.inteligencia.alertasAutomaticos.valorDetectado
+    );
+    const { score, motivos } = calcularScoreOportunidade({
+      statusConcorrencia: proc.statusConcorrencia,
+      urgenciaMaxima: proc.urgenciaMaxima,
+      textoConcatenado,
+      temValorMonetario,
+    });
+    proc.scoreOportunidade = score;
+    proc.motivosScore = motivos;
+    proc.mensagemClienteWhatsApp = gerarMensagemWhatsAppCliente({
+      numeroProcesso: proc.numeroFormatado,
+      tribunal: proc.siglaTribunal,
+      tipoAtoDetectado: proc.ultimoStatusDetectado,
+      prazoFatal: proc.prazoFatal,
+      riscoGolpeAlvara: !!proc.riscoGolpeAlvara,
+      ehMeroExpediente: !!proc.ehMeroExpediente,
+    });
+  }
+
+  return listaProcessos;
 }

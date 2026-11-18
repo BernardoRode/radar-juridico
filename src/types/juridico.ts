@@ -58,8 +58,17 @@ export interface AnaliseInteligencia {
     faseProcessual?: string;
     prazoDetectado?: string;
     prazoFatal?: string;
+    prazoInternoD2?: string;
+    limiteConfirmacaoDomicilio3Dias?: string;
     audienciaDetectada?: string;
+    linkAudienciaVirtual?: string;
     valorDetectado?: string;
+    honorariosDetectados?: string;
+    ehMeroExpediente?: boolean;
+    riscoGolpeAlvara?: boolean;
+    transitoEmJulgado?: boolean;
+    pautaJulgamento2Grau?: boolean;
+    checklistPericia?: string[];
     urgencia: 'ALTA' | 'MEDIA' | 'NORMAL';
   };
 }
@@ -81,6 +90,18 @@ export interface ProcessoAutoGerido {
   ultimoStatusDetectado: string;
   faseProcessual?: string;
   prazoFatal?: string;
+  prazoInternoD2?: string;
+  limiteConfirmacaoDomicilio3Dias?: string;
+  linkAudienciaVirtual?: string;
+  honorariosDetectados?: string;
+  ehMeroExpediente?: boolean;
+  riscoGolpeAlvara?: boolean;
+  transitoEmJulgado?: boolean;
+  pautaJulgamento2Grau?: boolean;
+  checklistPericia?: string[];
+  scoreOportunidade?: number;
+  motivosScore?: string[];
+  mensagemClienteWhatsApp?: string;
   urgenciaMaxima: 'ALTA' | 'MEDIA' | 'NORMAL';
   totalPublicacoes: number;
   linksDocumentosOriginais: AnaliseInteligencia['linksValidacao'];
@@ -137,5 +158,7 @@ export interface DadosDatajud {
   nivelSigilo?: number;
   totalMovimentos: number;
   movimentos: MovimentoDatajud[];
+  protocoloRecenteDetectado?: string;
+  origemCache?: boolean;
   mensagem?: string;
 }

@@ -17,6 +17,137 @@ export const LABEL_FASE_PROCESSUAL: Record<FaseProcessual, string> = {
   ANDAMENTO: 'Andamento / Despacho',
 };
 
+// Feriados Nacionais e Forenses Fixos (MM-DD) — Issue #11
+const FERIADOS_FIXOS_MMDD = new Set([
+  '01-01', // Confraternização Universal
+  '04-21', // Tiradentes
+  '05-01', // Dia do Trabalho
+  '08-11', // Dia do Advogado / Criação dos Cursos Jurídicos
+  '09-07', // Independência do Brasil
+  '10-12', // Nossa Senhora Aparecida
+  '11-02', // Finados (Feriado Forense)
+  '11-15', // Proclamação da República
+  '11-20', // Dia Nacional de Zumbi e da Consciência Negra
+  '12-08', // Dia da Justiça (Feriado Forense Nacional - Decreto-Lei 8.292/45)
+  '12-25', // Natal
+]);
+
+// Feriados Estaduais por UF / Tribunal (MM-DD)
+const FERIADOS_POR_UF: Record<string, string[]> = {
+  RS: ['09-20'], // Revolução Farroupilha (TJRS / TRT4 / TRF4)
+  SP: ['07-09'], // Revolução Constitucionalista (TJSP / TRT2 / TRT15 / TRF3)
+  RJ: ['04-23'], // São Jorge (TJRJ / TRT1 / TRF2)
+  BA: ['07-02'], // Independência da Bahia
+  MG: ['04-21'],
+  SC: ['08-11'],
+};
+
+function extrairUfDoTribunal(siglaTribunal?: string): string | undefined {
+  const s = (siglaTribunal || '').toUpperCase();
+  if (s.includes('RS') || s === 'TRT4' || s === 'TRF4') return 'RS';
+  if (s.includes('SP') || s === 'TRT2' || s === 'TRT15' || s === 'TRF3') return 'SP';
+  if (s.includes('RJ') || s === 'TRT1' || s === 'TRF2') return 'RJ';
+  if (s.includes('SC') || s === 'TRT12') return 'SC';
+  if (s.includes('BA') || s === 'TRT5') return 'BA';
+  return undefined;
+}
+
+/**
+ * Verifica se a data cai no Recesso Forense (Art. 220 do CPC: 20 de dezembro a 20 de janeiro).
+ */
+export function ehRecessoForenseArt220CPC(d: Date): boolean {
+  const mes = d.getUTCMonth() + 1; // 1..12
+  const dia = d.getUTCDate();
+  if (mes === 12 && dia >= 20) return true;
+  if (mes === 1 && dia <= 20) return true;
+  return false;
+}
+
+export function ehFeriadoForense(d: Date, siglaTribunal?: string): boolean {
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  const chave = `${mm}-${dd}`;
+
+  if (FERIADOS_FIXOS_MMDD.has(chave)) return true;
+
+  const uf = extrairUfDoTribunal(siglaTribunal);
+  if (uf && FERIADOS_POR_UF[uf]?.includes(chave)) return true;
+
+  return false;
+}
+
+function ehFimDeSemana(d: Date): boolean {
+  const dia = d.getUTCDay();
+  return dia === 0 || dia === 6;
+}
+
+export function ehDiaUtilForense(d: Date, siglaTribunal?: string): boolean {
+  return (
+    !ehFimDeSemana(d) &&
+    !ehRecessoForenseArt220CPC(d) &&
+    !ehFeriadoForense(d, siglaTribunal)
+  );
+}
+
+export function avancarDiasUteisForenses(
+  dataBase: Date,
+  diasUteis: number,
+  siglaTribunal?: string
+): Date {
+  const atual = new Date(dataBase.getTime());
+  let cont = 0;
+  while (cont < diasUteis) {
+    atual.setUTCDate(atual.getUTCDate() + 1);
+    if (ehDiaUtilForense(atual, siglaTribunal)) {
+      cont += 1;
+    }
+  }
+  return atual;
+}
+
+export function recuarDiasUteisForenses(
+  dataFatal: Date,
+  diasUteis: number,
+  siglaTribunal?: string
+): Date {
+  const atual = new Date(dataFatal.getTime());
+  let cont = 0;
+  while (cont < diasUteis) {
+    atual.setUTCDate(atual.getUTCDate() - 1);
+    if (ehDiaUtilForense(atual, siglaTribunal)) {
+      cont += 1;
+    }
+  }
+  return atual;
+}
+
+function formatarDataBr(d: Date): string {
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  return `${dd}/${mm}/${yyyy}`;
+}
+
+function formatarDataIso(d: Date): string {
+  const yyyy = d.getUTCFullYear();
+  const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(d.getUTCDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+function parseDataBrOuIso(raw?: string): Date | null {
+  if (!raw) return null;
+  const iso = raw.match(/(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) {
+    return new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])));
+  }
+  const br = raw.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+  if (br) {
+    return new Date(Date.UTC(Number(br[3]), Number(br[2]) - 1, Number(br[1])));
+  }
+  return null;
+}
+
 /**
  * Classifica automaticamente a fase processual a partir do texto da publicação.
  */
@@ -68,50 +199,21 @@ export function classificarFaseProcessual(
   return 'ANDAMENTO';
 }
 
-function ehFimDeSemana(d: Date): boolean {
-  const dia = d.getUTCDay();
-  return dia === 0 || dia === 6;
-}
-
-function avancarDiasUteis(dataBase: Date, diasUteis: number): Date {
-  const atual = new Date(dataBase.getTime());
-  let cont = 0;
-  while (cont < diasUteis) {
-    atual.setUTCDate(atual.getUTCDate() + 1);
-    if (!ehFimDeSemana(atual)) {
-      cont += 1;
-    }
-  }
-  return atual;
-}
-
-function parseDataBrOuIso(raw?: string): Date | null {
-  if (!raw) return null;
-  const iso = raw.match(/(\d{4})-(\d{2})-(\d{2})/);
-  if (iso) {
-    return new Date(Date.UTC(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3])));
-  }
-  const br = raw.match(/(\d{2})\/(\d{2})\/(\d{4})/);
-  if (br) {
-    return new Date(Date.UTC(Number(br[3]), Number(br[2]) - 1, Number(br[1])));
-  }
-  return null;
-}
-
 export interface CalculoPrazoFatal {
   dataFatalISO: string;
   dataFatalFormatada: string;
+  prazoInternoD2Formatado: string; // Issue #38: Dupla checagem Controladoria D-2
   diasRestantes: number;
 }
 
 /**
- * Calcula a data fatal estimada a partir da data de disponibilização no DJE/DJEN
- * e do prazo extraído (ex: "15 dias", "5 (cinco) dias úteis", "48 horas").
- * Regra padrão CPC/CLT: Publicação no 1º dia útil seguinte + contagem em dias úteis.
+ * Calcula a data fatal considerando Feriados Nacionais/Estaduais e o Recesso Forense
+ * do Art. 220 do CPC (20/12 a 20/01), além do Prazo Interno D-2 (Issue #11 e Issue #38).
  */
 export function calcularPrazoFatal(
   dataDisponibilizacao?: string,
-  prazoDetectado?: string
+  prazoDetectado?: string,
+  siglaTribunal?: string
 ): CalculoPrazoFatal | undefined {
   if (!dataDisponibilizacao || !prazoDetectado) return undefined;
 
@@ -124,20 +226,24 @@ export function calcularPrazoFatal(
   if (isNaN(quantidade) || quantidade <= 0 || quantidade > 180) return undefined;
 
   const ehHoras = /horas?/i.test(prazoDetectado);
-  // Dia da publicação = próximo dia útil após a disponibilização
-  const dataPublicacao = avancarDiasUteis(dataDisp, 1);
+  // Dia da publicação = 1º dia útil forense seguinte à disponibilização
+  const dataPublicacao = avancarDiasUteisForenses(dataDisp, 1, siglaTribunal);
 
-  let dataFatal: Date;
-  if (ehHoras) {
-    const diasEquivalentes = Math.max(1, Math.ceil(quantidade / 24));
-    dataFatal = avancarDiasUteis(dataPublicacao, diasEquivalentes);
-  } else {
-    dataFatal = avancarDiasUteis(dataPublicacao, quantidade);
-  }
+  const diasParaAvancar = ehHoras
+    ? Math.max(1, Math.ceil(quantidade / 24))
+    : quantidade;
 
-  const yyyy = dataFatal.getUTCFullYear();
-  const mm = String(dataFatal.getUTCMonth() + 1).padStart(2, '0');
-  const dd = String(dataFatal.getUTCDate()).padStart(2, '0');
+  const dataFatal = avancarDiasUteisForenses(
+    dataPublicacao,
+    diasParaAvancar,
+    siglaTribunal
+  );
+
+  // Prazo Interno D-2 da Controladoria (Issue #38)
+  const dataInternaD2 =
+    diasParaAvancar > 2
+      ? recuarDiasUteisForenses(dataFatal, 2, siglaTribunal)
+      : dataPublicacao;
 
   const hojeUtc = new Date();
   const hojeZero = Date.UTC(
@@ -150,8 +256,212 @@ export function calcularPrazoFatal(
   );
 
   return {
-    dataFatalISO: `${yyyy}-${mm}-${dd}`,
-    dataFatalFormatada: `${dd}/${mm}/${yyyy}`,
+    dataFatalISO: formatarDataIso(dataFatal),
+    dataFatalFormatada: formatarDataBr(dataFatal),
+    prazoInternoD2Formatado: formatarDataBr(dataInternaD2),
     diasRestantes,
   };
+}
+
+/**
+ * Issue #36: Anti-Multa Domicílio Judicial Eletrônico (Res. CNJ 455).
+ * Para citações ou processos recém-distribuídos sem advogado, calcula o limite de 3 dias úteis
+ * para confirmação da citação antes da multa de até 5% do valor da causa.
+ */
+export function calcularLimiteConfirmacaoDomicilio(
+  dataDisponibilizacao?: string,
+  siglaTribunal?: string
+): string | undefined {
+  const dataDisp = parseDataBrOuIso(dataDisponibilizacao);
+  if (!dataDisp) return undefined;
+  const dataLimite = avancarDiasUteisForenses(dataDisp, 3, siglaTribunal);
+  return formatarDataBr(dataLimite);
+}
+
+/**
+ * Issue #37: Filtro Anti-Ruído (separa "Mero Expediente" de atos que exigem ação/prazo).
+ */
+export function detectarMeroExpediente(
+  texto: string,
+  urgencia: 'ALTA' | 'MEDIA' | 'NORMAL',
+  prazoDetectado?: string
+): boolean {
+  if (urgencia !== 'NORMAL' || prazoDetectado) return false;
+  const t = (texto || '').toLowerCase();
+  const termosComando = [
+    'intime-se',
+    'manifeste-se',
+    'apresentar',
+    'comprovar',
+    'pagar',
+    'audiência',
+    'sentença',
+    'liminar',
+    'citação',
+    'penhora',
+    'sisbajud',
+    'alvará',
+    'precatório',
+    'rpv',
+  ];
+  if (termosComando.some((termo) => t.includes(termo))) return false;
+  return true;
+}
+
+/**
+ * Issue #54: Extrator Automático de Links de Audiência Virtual (Zoom / Teams / Meet / Webex / PJe).
+ */
+export function extrairLinkAudienciaVirtual(texto: string): string | undefined {
+  if (!texto) return undefined;
+  const regex =
+    /https?:\/\/(?:[a-zA-Z0-9-]+\.)?(?:zoom\.us|teams\.microsoft\.com|teams\.live\.com|meet\.google\.com|webex\.com)[^\s<>"')]+/i;
+  const match = texto.match(regex);
+  return match ? match[0].replace(/[.,;]+$/, '') : undefined;
+}
+
+/**
+ * Issue #51: Escudo Anti-Golpe do Falso Advogado (detecta expedição de Alvará, Precatório, RPV ou Levantamento).
+ */
+export function detectarRiscoGolpeAlvara(texto: string): boolean {
+  const t = (texto || '').toLowerCase();
+  return (
+    t.includes('alvará') ||
+    t.includes('precatório') ||
+    t.includes('rpv') ||
+    t.includes('requisição de pequeno valor') ||
+    t.includes('levantamento de valores') ||
+    t.includes('expedição de guia de retirada')
+  );
+}
+
+/**
+ * Issue #39 + #51: Gera mensagem pronta de WhatsApp para o cliente (Tradutor Juridiquês + Escudo Anti-Golpe).
+ */
+export function gerarMensagemWhatsAppCliente(params: {
+  numeroProcesso: string;
+  tribunal: string;
+  tipoAtoDetectado: string;
+  prazoFatal?: string;
+  riscoGolpeAlvara: boolean;
+  ehMeroExpediente: boolean;
+}): string {
+  const codigoSeguranca = params.numeroProcesso.replace(/[^0-9]/g, '').slice(-4) || '8492';
+
+  if (params.riscoGolpeAlvara) {
+    return `🛡️ *AVISO DE SEGURANÇA E ATUALIZAÇÃO PROCESSUAL*\nProcesso: ${params.numeroProcesso} (${params.tribunal})\n\nOlá! Identificamos uma movimentação referente a *Alvará / Liberação de Valores* no seu processo.\n\n⚠️ *ALERTA ANTI-GOLPE:* O nosso escritório *NUNCA* solicita Pix, taxas antecipadas ou transferências para liberar alvarás ou precatórios. Qualquer contato verdadeiro nosso informará o seu Código de Segurança: *#${codigoSeguranca}*.`;
+  }
+
+  if (params.ehMeroExpediente) {
+    return `📋 *Atualização de Rotina Processual*\nProcesso: ${params.numeroProcesso} (${params.tribunal})\n\nOlá! O seu processo teve hoje uma movimentação interna de rotina do próprio cartório (*${params.tipoAtoDetectado}*). Não há nenhuma exigência ou ação necessária da sua parte no momento. Seguimos acompanhando!`;
+  }
+
+  return `⚖️ *Informativo do Seu Processo*\nProcesso: ${params.numeroProcesso} (${params.tribunal})\n\nOlá! Saiu uma nova atualização no seu processo classificada como *${params.tipoAtoDetectado}*${
+    params.prazoFatal ? ` (prazo de manifestação do escritório até ${params.prazoFatal})` : ''
+  }. Nossa equipe jurídica já capturou o documento original do tribunal e está tomando todas as providências necessárias.`;
+}
+
+/**
+ * Issue #10: Calcula o Score de Oportunidade Comercial / Risco (0 a 100) do processo.
+ */
+export function calcularScoreOportunidade(params: {
+  statusConcorrencia: 'NOSSO_ESCRITORIO' | 'ESCRITORIO_CONCORRENTE' | 'SEM_ADVOGADO_CADASTRADO';
+  urgenciaMaxima: 'ALTA' | 'MEDIA' | 'NORMAL';
+  textoConcatenado: string;
+  temValorMonetario: boolean;
+}): { score: number; motivos: string[] } {
+  let score = 20;
+  const motivos: string[] = [];
+  const t = (params.textoConcatenado || '').toLowerCase();
+
+  if (params.statusConcorrencia === 'SEM_ADVOGADO_CADASTRADO') {
+    score += 45;
+    motivos.push('Processo sem advogado habilitado (Abordagem antecipada)');
+  } else if (params.statusConcorrencia === 'ESCRITORIO_CONCORRENTE') {
+    score += 25;
+    motivos.push('Conduzido por escritório concorrente');
+  }
+
+  if (t.includes('revelia') || t.includes('intempestiv') || t.includes('decurso de prazo')) {
+    score += 30;
+    motivos.push('Falha crítica detectada (Revelia / Perda de Prazo)');
+  }
+  if (t.includes('sisbajud') || t.includes('penhora') || t.includes('bloqueio')) {
+    score += 25;
+    motivos.push('Risco patrimonial imediato (Sisbajud / Penhora)');
+  }
+  if (params.urgenciaMaxima === 'ALTA') {
+    score += 15;
+    motivos.push('Ato judicial de Alta Urgência');
+  }
+  if (params.temValorMonetario) {
+    score += 10;
+    motivos.push('Valor financeiro expresso no despacho');
+  }
+
+  return {
+    score: Math.min(100, score),
+    motivos,
+  };
+}
+
+/**
+ * Issue #52: Extrai menções a Honorários de Sucumbência / Advocatícios (% ou R$).
+ */
+export function extrairHonorariosSucumbencia(texto: string): string | undefined {
+  if (!texto) return undefined;
+  const matchPerc = texto.match(
+    /honor[áa]rios[^.]{0,80}?(\d{1,2}\s*%\s*(?:sobre[^.,;]+)?)/i
+  );
+  if (matchPerc) return matchPerc[1].trim();
+
+  const matchValor = texto.match(
+    /honor[áa]rios[^.]{0,60}?(R\$\s*\d{1,3}(?:\.\d{3})*,\d{2})/i
+  );
+  if (matchValor) return matchValor[1].trim();
+
+  return undefined;
+}
+
+/**
+ * Issue #61: Detecta Trânsito em Julgado ou Arquivamento Definitivo.
+ */
+export function detectarTransitoEmJulgado(texto: string): boolean {
+  const t = (texto || '').toLowerCase();
+  return (
+    t.includes('trânsito em julgado') ||
+    t.includes('transitado em julgado') ||
+    t.includes('transitou em julgado') ||
+    t.includes('arquivamento definitivo') ||
+    t.includes('arquive-se definitivamente') ||
+    t.includes('baixa definitiva')
+  );
+}
+
+/**
+ * Issue #63: Detecta Inclusão em Pauta de Julgamento / Sessão de 2º Grau para Sustentação Oral.
+ */
+export function detectarPautaJulgamento2Grau(
+  texto: string,
+  nomeOrgao?: string
+): boolean {
+  const t = `${texto || ''} ${nomeOrgao || ''}`.toLowerCase();
+  return (
+    t.includes('pauta de julgamento') ||
+    t.includes('sessão de julgamento') ||
+    t.includes('sustentação oral') ||
+    t.includes('incluído em pauta') ||
+    (t.includes('acórdão') && (t.includes('turma') || t.includes('câmara')))
+  );
+}
+
+/**
+ * Issue #64: Gera checklist obrigatório quando o processo entra na fase de Perícia.
+ */
+export function gerarChecklistPericia(fase: FaseProcessual): string[] | undefined {
+  if (fase !== 'PERICIA') return undefined;
+  return [
+    '1. Indicar Assistente Técnico nos autos',
+    '2. Elaborar e protocolar Quesitos Técnicos',
+    '3. Agendar data/local da perícia com o cliente e perito',
+  ];
 }

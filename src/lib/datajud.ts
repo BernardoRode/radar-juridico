@@ -1,4 +1,11 @@
 import { DadosDatajud, MovimentoDatajud } from '@/types/juridico';
+import { prisma } from '@/lib/prisma';
+
+const cacheDatajudMemoria = new Map<
+  string,
+  { expiraEm: number; dados: DadosDatajud }
+>();
+const CACHE_TTL_MS = 1000 * 60 * 30; // 30 minutos (Issue #34: Cache Anti-429)
 
 const DATAJUD_PUBLIC_API_KEY =
   process.env.DATAJUD_API_KEY ||
@@ -117,6 +124,11 @@ export async function consultarDatajudProcesso(
   siglaTribunal?: string
 ): Promise<DadosDatajud> {
   const numLimpo = numeroProcesso.replace(/[^0-9]/g, '');
+  const emCache = cacheDatajudMemoria.get(numLimpo);
+  if (emCache && emCache.expiraEm > Date.now()) {
+    return { ...emCache.dados, origemCache: true };
+  }
+
   const indice = resolverIndiceDatajud(numLimpo, siglaTribunal);
 
   if (!indice) {
@@ -199,7 +211,22 @@ export async function consultarDatajudProcesso(
       (b.dataHora || '').localeCompare(a.dataHora || '')
     );
 
-    return {
+    // Issue #42: Detecta protocolo de petição nos últimos movimentos para baixa automática de prazo
+    const movProtocolo = movimentosOrdenados.slice(0, 5).find((m) => {
+      const n = (m.nome || '').toLowerCase();
+      return (
+        m.codigo === 85 ||
+        n.includes('petição') ||
+        n.includes('juntada de petição') ||
+        n.includes('contestação') ||
+        n.includes('recurso')
+      );
+    });
+    const protocoloRecenteDetectado = movProtocolo
+      ? `${movProtocolo.nome} em ${(movProtocolo.dataHora || '').slice(0, 10)}`
+      : undefined;
+
+    const resultadoFinal: DadosDatajud = {
       encontrado: true,
       indiceConsultado: indice,
       numeroProcesso: src.numeroProcesso || numLimpo,
@@ -215,7 +242,26 @@ export async function consultarDatajudProcesso(
       nivelSigilo: src.nivelSigilo,
       totalMovimentos: movimentosOrdenados.length,
       movimentos: movimentosOrdenados,
+      protocoloRecenteDetectado,
     };
+
+    cacheDatajudMemoria.set(numLimpo, {
+      expiraEm: Date.now() + CACHE_TTL_MS,
+      dados: resultadoFinal,
+    });
+
+    // Salva enriquecimento no banco SQLite se o processo existir
+    prisma.processo
+      .update({
+        where: { numeroProcesso: numLimpo },
+        data: {
+          dataAjuizamento: resultadoFinal.dataAjuizamento || null,
+          assuntosJson: JSON.stringify(resultadoFinal.assuntos),
+        },
+      })
+      .catch(() => {});
+
+    return resultadoFinal;
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Erro desconhecido';
     return {
