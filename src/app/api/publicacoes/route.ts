@@ -7,6 +7,7 @@ import {
   obterOabsEscritorio,
   salvarRadarNoBanco,
 } from '@/lib/persistencia';
+import { gerarRelatorioBIJuridico } from '@/lib/analytics-juridico';
 import { ComunicacaoCNJ } from '@/types/juridico';
 
 const CNJ_API_URL = 'https://comunicaapi.pje.jus.br/api/v1/comunicacao';
@@ -124,12 +125,15 @@ export async function GET(request: NextRequest) {
       ).length,
     };
 
+    const biJuridico = gerarRelatorioBIJuridico(processosConsolidados);
+
     return NextResponse.json({
       sucesso: true,
       endpointConsultado: targetUrl,
       oabsConsideradas: nossasOabs,
       persistencia,
       resumo,
+      biJuridico,
       processosConsolidados,
       publicacoes: publicacoesEnriquecidas,
     });

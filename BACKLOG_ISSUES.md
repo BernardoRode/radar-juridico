@@ -77,7 +77,7 @@ As APIs tradicionais do mercado (Escavador, Digesto, Kurier, etc.) entregam basi
 - **Objetivo:** Evoluir o `calcularPrazoFatal()` para considerar o **Recesso Forense (20/12 a 20/01)**, feriados nacionais/estaduais por tribunal e distinção automática entre **dias úteis (CPC/CLT)** e **dias corridos**, além de permitir baixar o prazo direto para o **Google Calendar / Outlook (`.ics`)**.
 
 ### Issue #12: [Jurimetria de Vara & Juiz] Perfil Decisório e Tempo Médio de Tramitação
-- **Status:** 💡 Nova Ideia (Diferencial de Inteligência)
+- **Status:** ✅ Concluído (Aba `BI & Jurimetria` + [src/lib/analytics-juridico.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/analytics-juridico.ts))
 - **Objetivo:** Cruzar os andamentos do Datajud (Issue #4) e decisões armazenadas no banco para calcular automaticamente o **tempo médio até a sentença**, taxa de **procedência vs. improcedência** e tendência de concessão de **liminares** por Vara/Magistrado.
 
 ### Issue #13: [Cockpit de Prazos] Kanban Operacional Auto-Gerido (Zero Cadastro Manual)
@@ -97,23 +97,23 @@ As APIs tradicionais do mercado (Escavador, Digesto, Kurier, etc.) entregam basi
 ## Fase 5: Inteligência Estratégica, Prospecção & Mercado
 
 ### Issue #16: [Monitor de Autores Contumazes] Detector de Litigância Predatória / Ofensores
-- **Status:** 💡 Nova Ideia
+- **Status:** ✅ Concluído (`autoresOuAdvogadosRecorrentes` em [src/lib/analytics-juridico.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/analytics-juridico.ts))
 - **Objetivo:** Identificar advogados e autores que ingressam com ações repetitivas contra o mesmo cliente (ex: mesmo advogado da parte contrária em 15+ processos da LG), mapeando padrões de pedidos e teses para defesa em bloco.
 
 ### Issue #17: [Radar de Precatórios & RPVs] Detector de Créditos, Alvarás e Depósitos Judiciais
-- **Status:** 💡 Nova Ideia
+- **Status:** ✅ Concluído (`oportunidadesCreditoAlvara` em [src/lib/analytics-juridico.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/analytics-juridico.ts))
 - **Objetivo:** Monitorar publicações com termos como `"RPV"`, `"precatório"`, `"alvará"`, `"expedição de guia"` e `"levantamento"`, criando uma carteira automática de créditos a receber / liberar.
 
 ### Issue #18: [Mapa de Calor Processual] Distribuição Geográfica por UF, Tribunal e Comarca
-- **Status:** 💡 Nova Ideia
+- **Status:** ✅ Concluído (`distribuicaoPorTribunal` em [src/lib/analytics-juridico.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/analytics-juridico.ts))
 - **Objetivo:** Gerar painel analítico por estado/comarca mostrando onde o cliente concentra mais demandas e condenações, permitindo atuação preventiva regionalizada.
 
 ### Issue #19: [Benchmark Competitivo] Comparativo Nosso Escritório vs. Concorrência
-- **Status:** 💡 Nova Ideia
+- **Status:** ✅ Concluído (`benchmarkConcorrencia` em [src/lib/analytics-juridico.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/analytics-juridico.ts))
 - **Objetivo:** Painel comparando indicadores reais entre os processos conduzidos pelas nossas OABs vs. escritórios concorrentes (taxa de revelia, bloqueios, condenações e tempo de reação).
 
 ### Issue #20: [Radar Societário & Patrimonial] Alertas de Falência, RJ e IDPJ
-- **Status:** 💡 Nova Ideia
+- **Status:** ✅ Concluído (`alertasSocietariosIdpj` em [src/lib/analytics-juridico.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/analytics-juridico.ts))
 - **Objetivo:** Detectar automaticamente incidentes de **Desconsideração da Personalidade Jurídica (IDPJ)**, redirecionamento a sócios, recuperação judicial ou falência envolvendo partes monitoradas.
 
 ---
@@ -133,7 +133,7 @@ As APIs tradicionais do mercado (Escavador, Digesto, Kurier, etc.) entregam basi
 - **Objetivo:** Quando houver audiência detectada, compilar automaticamente os PDFs extraídos, últimas movimentações do Datajud, pontos controvertidos e sugestões de perguntas para testemunhas/partes.
 
 ### Issue #24: [Provisionamento Financeiro] Estimador Automático de Passivo e Contingência
-- **Status:** 💡 Nova Ideia
+- **Status:** ✅ Concluído (`contingenciaPorRisco` em [src/lib/analytics-juridico.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/analytics-juridico.ts))
 - **Objetivo:** Consolidar valores de causa, condenações e bloqueios (`R$`) por cliente em um relatório de contingência (Provável / Possível / Remoto) pronto para o financeiro/contabilidade do cliente.
 
 ### Issue #25: [Portal do Cliente White-Label] Painel Executivo para o Jurídico Interno
@@ -215,7 +215,7 @@ Mapeamento direto das dores mais graves relatadas por advogados e *controllers* 
 - **Solução no Radar:** Botão **"Gerar Mensagem Tranquilizadora para Cliente (WhatsApp)"** que traduz o andamento técnico para linguagem simples e humana (ex: *"Olá! Seu processo teve apenas uma movimentação interna de rotina no cartório, segue tudo dentro do esperado e não há nenhuma ação necessária sua"*).
 
 ### Issue #40: [Detector de Indisponibilidade dos Tribunais] Monitor de Queda PJe / eproc + Link da Certidão de Suspensão
-- **Status:** 🔥 Crítico (Salva Prazos Perdidos por Queda do Tribunal)
+- **Status:** ✅ Concluído (`GET /api/saude-tribunais`)
 - **Dor Real:** O PJe ou eproc fica fora do ar no último dia do prazo e o advogado perde horas procurando onde baixar a certidão de indisponibilidade para provar tempestividade.
 - **Solução no Radar:** Health-check automático que monitora a latência/queda dos portais PJe/eproc consultados, registra o horário exato da indisponibilidade no banco e aponta o link direto da página de certidões de indisponibilidade do respectivo tribunal.
 
@@ -240,7 +240,7 @@ Mapeamento direto das dores mais graves relatadas por advogados e *controllers* 
 - **Solução no Radar:** Permitir cadastrar regras de exclusão por cliente (ex: *"Ignorar processos onde o polo ativo/passivo não contenha CNPJ X ou UF Y"*) e botão `"Marcar como Homônimo / Ignorar Processo"` para nunca mais poluir o painel.
 
 ### Issue #45: [Calculadora de Risco de Revelia & Valor em Risco no Topo] Priorização Financeira dos Prazos
-- **Status:** 💡 Diferencial de Gestão
+- **Status:** ✅ Concluído (Score + Contingência Financeira em [src/lib/analytics-juridico.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/analytics-juridico.ts))
 - **Dor Real:** Todos os prazos parecem iguais na lista do software, mas perder um prazo numa ação de R$ 2 milhões é muito diferente de um despacho simples.
 - **Solução no Radar:** Ordenar o painel de prazos combinando **Dias até o Prazo Fatal × Valor Monetário Detectado (`R$`) × Risco (Revelia/Bloqueio)**, destacando no topo os processos de maior impacto financeiro.
 
@@ -255,7 +255,7 @@ Mapeamento direto das dores mais graves relatadas por advogados e *controllers* 
 - **Solução no Radar:** Campo `advogadoSubstituto` e `emFeriasAte` na tabela `AdvogadoEscritorio`, redirecionando todos os alertas e prazos daquela OAB automaticamente para o substituto.
 
 ### Issue #48: [Busca Offline & Backup Local Portátil (Zero Lock-in)] Exportação Completa da Base do Escritório
-- **Status:** 💡 Reclamação Frequente no Reclame Aqui (Cancelamento / Migração)
+- **Status:** ✅ Concluído (`GET /api/exportar/backup`)
 - **Dor Real:** Quando o escritório quer cancelar um software jurídico caro (Projuris, LegalOne, Astrea), sofre com *vendor lock-in* e dificuldade para exportar todo o seu histórico de processos, prazos e PDFs.
 - **Solução no Radar:** Botão **"Exportar Backup Completo do Escritório (JSON / CSV / SQLite)"** com 1 clique, garantindo soberania total dos dados para o escritório.
 
@@ -265,7 +265,7 @@ Mapeamento direto das dores mais graves relatadas por advogados e *controllers* 
 - **Solução no Radar:** Navegação ultra-rápida por teclado na lista de publicações para aprovar, extrair inteiro teor do PJe, classificar urgência ou arquivar mero expediente em segundos.
 
 ### Issue #50: [Painel de Saúde da Captura (Health Dashboard)] Monitoramento de Cobertura por Tribunal (DJEN / PJe / Datajud)
-- **Status:** 💡 Transparência Técnica Total
+- **Status:** ✅ Concluído (`GET /api/saude-tribunais` + painel na aba Banco & Config)
 - **Dor Real:** Os softwares jurídicos escondem quando o robô deles está quebrado para determinado tribunal (ex: TJSP ou TRT2 atrasado), e o advogado só descobre depois que perdeu o prazo.
 - **Solução no Radar:** Semáforo em tempo real mostrando o status de resposta e tempo de latência do **Comunica PJe (DJEN)**, da **API de Validação PJe** e do **Datajud** para cada tribunal monitorado pelo escritório.
 
@@ -296,7 +296,7 @@ Varredura complementar das críticas de advogados em redes sociais e avaliaçõe
 - **Solução no Radar:** Regex especializado que extrai qualquer URL de videoconferência (`zoom.us`, `teams.microsoft.com`, `meet.google.com`, `webex.com`, `pje.jus.br/audiencia`) de dentro das publicações/PDFs e fixa um botão **"Entrar na Sala de Audiência Virtual"** no topo da pasta do processo!
 
 ### Issue #55: [Auditoria de SLA & Faturas de Escritórios Terceirizados] Módulo Legal Operations para Empresas
-- **Status:** 💡 Gargalo #1 no LinkedIn de Diretores Jurídicos & Legal Ops
+- **Status:** ✅ Concluído (Benchmark Legal Ops na aba `BI & Jurimetria`)
 - **Dor Real:** Departamentos jurídicos de empresas (como a própria LG) pagam faturas mensais para vários escritórios terceirizados sem conseguir auditar se o escritório realmente cumpriu os prazos no SLA, se houve revelia ou se o processo cobrado na fatura já estava arquivado.
 - **Solução no Radar:** Painel **Legal Ops / SLA de Bancas Externas** que cruza as publicações oficiais do CNJ com a atuação de cada escritório terceirizado, apontando tempo de resposta, revelias e processos inativos/arquivados.
 
@@ -331,7 +331,7 @@ Varredura complementar das críticas de advogados em redes sociais e avaliaçõe
 - **Solução no Radar:** Detecção automática de `Certidão de Trânsito em Julgado` ou `Arquivamento Definitivo` (código TPU Datajud 246 / 848), movendo o processo para `ENCERRADO` e disparando gatilho final de cobrança de honorários.
 
 ### Issue #62: [Alerta de Segredo de Justiça & Conformidade LGPD (Anonimização 1-Clique)]
-- **Status:** 💡 Reclamação Recorrente sobre Jusbrasil e Escavador
+- **Status:** ✅ Concluído (`GET /api/exportar/backup?lgpd=true`)
 - **Dor Real:** Vazamento ou exposição de dados sensíveis de partes (CPF, dados médicos em perícias trabalhistas, segredo de justiça) em relatórios compartilhados.
 - **Solução no Radar:** Respeito ao flag `nivelSigilo` do Datajud e opção **"Exportar Relatório com Anonimização LGPD"** (mascarando CPFs e nomes de pessoas físicas automaticamente).
 

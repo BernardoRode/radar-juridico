@@ -29,11 +29,13 @@ import {
   ResultadoExtracaoDocumento,
 } from '@/types/juridico';
 import type { AnaliseIAJuridica } from '@/lib/ia-juridica';
+import { gerarRelatorioBIJuridico } from '@/lib/analytics-juridico';
 
 type ModoBusca = 'RADAR_CLIENTE' | 'OAB_ADVOGADO' | 'PROCESSO_DIRETO' | 'INSPETOR_LINKS';
 type AbaVisualizacao =
   | 'PROCESSOS_AUTO'
   | 'COCKPIT_KANBAN'
+  | 'BI_JURIMETRIA'
   | 'FEED_PUBLICACOES'
   | 'BANCO_CONFIG'
   | 'API_DOCS';
@@ -216,6 +218,27 @@ export default function RadarJuridicoHome() {
   const [novoWebhookCanal, setNovoWebhookCanal] = useState('WHATSAPP');
   const [novoWebhookUrl, setNovoWebhookUrl] = useState('');
   const [tokenJwtGerado, setTokenJwtGerado] = useState<string | null>(null);
+  const [saudeTribunais, setSaudeTribunais] = useState<
+    Array<{
+      servico: string;
+      sistema: string;
+      status: string;
+      latenciaMs: number;
+      urlCertidaoIndisponibilidade: string;
+    }>
+  >([]);
+  const [verificandoSaude, setVerificandoSaude] = useState(false);
+
+  async function verificarSaudeDosTribunais() {
+    setVerificandoSaude(true);
+    try {
+      const res = await fetch('/api/saude-tribunais');
+      const json = await res.json();
+      if (json.servicos) setSaudeTribunais(json.servicos);
+    } finally {
+      setVerificandoSaude(false);
+    }
+  }
 
   async function carregarBancoEConfig() {
     const [rCli, rAdv, rProc, rCron, rWh] = await Promise.all([
@@ -465,6 +488,17 @@ export default function RadarJuridicoHome() {
             >
               <Clock className="w-3.5 h-3.5" />
               Cockpit Kanban
+            </button>
+            <button
+              onClick={() => setAbaAtiva('BI_JURIMETRIA')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 ${
+                abaAtiva === 'BI_JURIMETRIA'
+                  ? 'bg-indigo-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Scale className="w-3.5 h-3.5" />
+              BI &amp; Jurimetria
             </button>
             <button
               onClick={() => setAbaAtiva('FEED_PUBLICACOES')}
@@ -1842,6 +1876,176 @@ export default function RadarJuridicoHome() {
           </section>
         )}
 
+        {/* CONTEÚDO DA ABA: BI & JURIMETRIA (#12, #16, #17, #18, #19, #20, #24, #45, #55) */}
+        {abaAtiva === 'BI_JURIMETRIA' && (() => {
+          const bi = gerarRelatorioBIJuridico(processos);
+          return (
+            <section className="space-y-6">
+              {/* Linha 1: Provisionamento Financeiro & Benchmark SLA */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-4">
+                  <div className="flex items-center justify-between">
+                    <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                      💰 Provisionamento Financeiro &amp; Contingência (#24 / #45)
+                    </h2>
+                    <span className="text-lg font-bold font-mono text-emerald-400">
+                      {bi.passivoFormatado}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3 text-xs">
+                    <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30">
+                      <span className="text-[10px] text-rose-300 uppercase block">
+                        Risco Provável (Alta Urgência)
+                      </span>
+                      <span className="text-sm font-bold font-mono text-white">
+                        {bi.contingenciaPorRisco.provavelRS.toLocaleString('pt-BR', {
+                          style: 'currency',
+                          currency: 'BRL',
+                        })}
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                      <span className="text-[10px] text-amber-300 uppercase block">
+                        Risco Possível (Média)
+                      </span>
+                      <span className="text-sm font-bold font-mono text-white">
+                        {bi.contingenciaPorRisco.possivelRS.toLocaleString('pt-BR', {
+                          style: 'currency',
+                          currency: 'BRL',
+                        })}
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
+                      <span className="text-[10px] text-slate-400 uppercase block">
+                        Risco Remoto (Normal)
+                      </span>
+                      <span className="text-sm font-bold font-mono text-white">
+                        {bi.contingenciaPorRisco.remotoRS.toLocaleString('pt-BR', {
+                          style: 'currency',
+                          currency: 'BRL',
+                        })}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-4">
+                  <h2 className="text-sm font-bold text-white">
+                    📊 Benchmark &amp; Auditoria de SLA — Nosso Escritório vs. Terceirizados (#19 / #55)
+                  </h2>
+                  <div className="grid grid-cols-3 gap-3 text-xs">
+                    <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
+                      <span className="text-[10px] text-emerald-300 uppercase block">
+                        Nosso Escritório
+                      </span>
+                      <p className="text-lg font-bold text-white">
+                        {bi.benchmarkConcorrencia.nossoEscritorio.processos} proc.
+                      </p>
+                      <span className="text-[10px] text-slate-400">
+                        {bi.benchmarkConcorrencia.nossoEscritorio.incidentesCriticos} críticos
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30">
+                      <span className="text-[10px] text-amber-300 uppercase block">
+                        Concorrência / Terceiros
+                      </span>
+                      <p className="text-lg font-bold text-amber-300">
+                        {bi.benchmarkConcorrencia.concorrencia.processos} proc.
+                      </p>
+                      <span className="text-[10px] text-rose-300 font-semibold">
+                        {bi.benchmarkConcorrencia.concorrencia.incidentesCriticos} incidentes/bloqueios
+                      </span>
+                    </div>
+                    <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/30">
+                      <span className="text-[10px] text-purple-300 uppercase block">
+                        Sem Advogado (Novos)
+                      </span>
+                      <p className="text-lg font-bold text-purple-300">
+                        {bi.benchmarkConcorrencia.semAdvogado.processos} proc.
+                      </p>
+                      <span className="text-[10px] text-slate-400">
+                        Abordagem imediata
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Linha 2: Mapa de Calor (#18), Jurimetria Varas (#12) e Ofensores/Bancas (#16) */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 text-xs">
+                <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-3">
+                  <h3 className="font-bold text-white">
+                    🗺️ Mapa de Calor por Tribunal / UF (#18)
+                  </h3>
+                  {bi.distribuicaoPorTribunal.length === 0 ? (
+                    <p className="text-slate-500">Dispare uma busca para visualizar o mapa.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {bi.distribuicaoPorTribunal.map((t, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950 border border-slate-800"
+                        >
+                          <span className="font-bold text-indigo-300">{t.tribunal}</span>
+                          <span>
+                            <strong>{t.totalProcessos}</strong> proc. ({t.urgenciaAlta} urgentes)
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-3">
+                  <h3 className="font-bold text-white">
+                    ⚖️ Jurimetria por Vara / Órgão Julgador (#12)
+                  </h3>
+                  {bi.topOrgaosJulgadores.length === 0 ? (
+                    <p className="text-slate-500">Sem órgãos julgadores analisados ainda.</p>
+                  ) : (
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {bi.topOrgaosJulgadores.map((o, i) => (
+                        <div
+                          key={i}
+                          className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 space-y-0.5"
+                        >
+                          <p className="font-semibold text-white truncate">{o.orgao}</p>
+                          <p className="text-[11px] text-slate-400">
+                            {o.processos} proc. • Fase predominante: {o.fasePredominante}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-3">
+                  <h3 className="font-bold text-white">
+                    🚨 Autores Contumazes &amp; Advogados Externos (#16)
+                  </h3>
+                  {bi.autoresOuAdvogadosRecorrentes.length === 0 ? (
+                    <p className="text-slate-500">Nenhum ofensor/banca listado ainda.</p>
+                  ) : (
+                    <div className="space-y-2 max-h-60 overflow-y-auto">
+                      {bi.autoresOuAdvogadosRecorrentes.map((item, i) => (
+                        <div
+                          key={i}
+                          className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-950 border border-slate-800"
+                        >
+                          <span className="truncate text-slate-200">{item.nome}</span>
+                          <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 font-mono text-[10px] shrink-0">
+                            {item.quantidadeProcessos}x
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </section>
+          );
+        })()}
+
         {/* CONTEÚDO DA ABA 2: FEED DE PUBLICAÇÕES */}
         {abaAtiva === 'FEED_PUBLICACOES' && (
           <section className="space-y-4">
@@ -2200,6 +2404,26 @@ export default function RadarJuridicoHome() {
                   >
                     <Clock className="w-3.5 h-3.5" /> Todos os Prazos (.ics)
                   </a>
+                  <a
+                    href="/api/exportar/backup"
+                    className="px-3 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/40 text-xs text-cyan-200 flex items-center gap-1.5"
+                  >
+                    <Download className="w-3.5 h-3.5" /> Backup Zero Lock-in (#48)
+                  </a>
+                  <a
+                    href="/api/exportar/backup?lgpd=true"
+                    className="px-3 py-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-xs text-purple-200 flex items-center gap-1.5"
+                  >
+                    <ShieldAlert className="w-3.5 h-3.5" /> Backup LGPD Anonimizado (#62)
+                  </a>
+                  <button
+                    type="button"
+                    onClick={verificarSaudeDosTribunais}
+                    className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-xs text-amber-200 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${verificandoSaude ? 'animate-spin' : ''}`} />
+                    Saúde dos Tribunais (#40/#50)
+                  </button>
                   <button
                     type="button"
                     onClick={carregarBancoEConfig}
@@ -2209,6 +2433,38 @@ export default function RadarJuridicoHome() {
                   </button>
                 </div>
               </div>
+
+              {saudeTribunais.length > 0 && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
+                  {saudeTribunais.map((st, idx) => (
+                    <div
+                      key={idx}
+                      className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5 text-xs"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-white">{st.servico}</span>
+                        <span
+                          className={`px-2 py-0.5 rounded font-bold text-[10px] ${
+                            st.status === 'ONLINE'
+                              ? 'bg-emerald-500/20 text-emerald-300'
+                              : 'bg-rose-500/20 text-rose-300'
+                          }`}
+                        >
+                          {st.status} ({st.latenciaMs}ms)
+                        </span>
+                      </div>
+                      <a
+                        href={st.urlCertidaoIndisponibilidade}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-[11px] text-indigo-400 hover:underline inline-flex items-center gap-1"
+                      >
+                        Baixar Certidão de Indisponibilidade <ExternalLink className="w-3 h-3" />
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
 
               {processosDb.length === 0 ? (
                 <p className="text-xs text-slate-500">
