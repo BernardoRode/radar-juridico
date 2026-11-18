@@ -16,11 +16,22 @@ import {
   Sparkles,
   Clock,
   Link2,
+  Download,
+  FileCheck2,
+  Database,
+  Plus,
+  Trash2,
 } from 'lucide-react';
-import { ProcessoAutoGerido, PublicacaoEnriquecida } from '@/types/juridico';
+import {
+  DadosDatajud,
+  ProcessoAutoGerido,
+  PublicacaoEnriquecida,
+  ResultadoExtracaoDocumento,
+} from '@/types/juridico';
+import type { AnaliseIAJuridica } from '@/lib/ia-juridica';
 
 type ModoBusca = 'RADAR_CLIENTE' | 'OAB_ADVOGADO' | 'PROCESSO_DIRETO' | 'INSPETOR_LINKS';
-type AbaVisualizacao = 'PROCESSOS_AUTO' | 'FEED_PUBLICACOES' | 'API_DOCS';
+type AbaVisualizacao = 'PROCESSOS_AUTO' | 'FEED_PUBLICACOES' | 'BANCO_CONFIG' | 'API_DOCS';
 
 export default function RadarJuridicoHome() {
   const [modoBusca, setModoBusca] = useState<ModoBusca>('RADAR_CLIENTE');
@@ -63,7 +74,202 @@ export default function RadarJuridicoHome() {
   const [linkInspecao, setLinkInspecao] = useState(
     'https://pje.trt4.jus.br/pjekz/validacao/26111612374902100000201044828?instancia=1'
   );
-  const [resultadoLink, setResultadoLink] = useState<Record<string, unknown> | null>(null);
+  const [inspecionandoLink, setInspecionandoLink] = useState(false);
+  const [resultadoLink, setResultadoLink] = useState<{
+    sucesso?: boolean;
+    sistemaDetectado?: string;
+    tribunalHost?: string;
+    urlOriginal?: string;
+    parametrosExtraidos?: Record<string, string>;
+    extracao?: ResultadoExtracaoDocumento;
+    explicacaoTecnica?: string;
+  } | null>(null);
+  const [extraindoUrl, setExtraindoUrl] = useState<string | null>(null);
+  const [documentosExtraidos, setDocumentosExtraidos] = useState<
+    Record<string, ResultadoExtracaoDocumento>
+  >({});
+  const [carregandoDatajud, setCarregandoDatajud] = useState(false);
+  const [datajudPorProcesso, setDatajudPorProcesso] = useState<
+    Record<string, DadosDatajud>
+  >({});
+  const [analisandoIA, setAnalisandoIA] = useState(false);
+  const [analiseIAPorProcesso, setAnaliseIAPorProcesso] = useState<
+    Record<string, AnaliseIAJuridica>
+  >({});
+
+  async function analisarProcessoComIA(proc: ProcessoAutoGerido) {
+    const ultimaPub = proc.historicoPublicacoes[0];
+    if (!ultimaPub?.texto) return;
+    setAnalisandoIA(true);
+    try {
+      const res = await fetch('/api/ia/analisar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          texto: ultimaPub.texto,
+          statusConcorrencia: proc.statusConcorrencia,
+          tipoAtoDetectado: proc.ultimoStatusDetectado,
+          tribunal: proc.siglaTribunal,
+          numeroProcesso: proc.numeroFormatado,
+        }),
+      });
+      const json = await res.json();
+      if (json.analise) {
+        setAnaliseIAPorProcesso((prev) => ({
+          ...prev,
+          [proc.numeroProcesso]: json.analise,
+        }));
+      }
+    } finally {
+      setAnalisandoIA(false);
+    }
+  }
+
+  // Estado da Aba Banco & Configurações (Issue #5)
+  const [clientesDb, setClientesDb] = useState<
+    Array<{ id: string; nome: string; variacoes?: string; cnpjs?: string }>
+  >([]);
+  const [advogadosDb, setAdvogadosDb] = useState<
+    Array<{ id: string; nome: string; numeroOab: string; ufOab: string }>
+  >([]);
+  const [processosDb, setProcessosDb] = useState<
+    Array<{
+      id: string;
+      numeroFormatado: string;
+      siglaTribunal: string;
+      statusConcorrencia: string;
+      ultimoStatusDetectado: string;
+      urgenciaMaxima: string;
+      _count?: { publicacoes: number; documentos: number };
+    }>
+  >([]);
+  const [novoClienteNome, setNovoClienteNome] = useState('');
+  const [novoClienteCnpj, setNovoClienteCnpj] = useState('');
+  const [novoAdvNome, setNovoAdvNome] = useState('');
+  const [novoAdvOab, setNovoAdvOab] = useState('');
+  const [novoAdvUf, setNovoAdvUf] = useState('RS');
+  const [rodandoCron, setRodandoCron] = useState(false);
+  const [execucoesRadar, setExecucoesRadar] = useState<
+    Array<{
+      id: string;
+      origem: string;
+      clientesVarredura: number;
+      oabsVarredura: number;
+      publicacoesEncontradas: number;
+      processosSalvos: number;
+      alertasAlta: number;
+      status: string;
+      iniciadoEm: string;
+    }>
+  >([]);
+  const [webhooksDb, setWebhooksDb] = useState<
+    Array<{ id: string; nome: string; canal: string; urlDestino: string }>
+  >([]);
+  const [novoWebhookNome, setNovoWebhookNome] = useState('');
+  const [novoWebhookCanal, setNovoWebhookCanal] = useState('WHATSAPP');
+  const [novoWebhookUrl, setNovoWebhookUrl] = useState('');
+  const [tokenJwtGerado, setTokenJwtGerado] = useState<string | null>(null);
+
+  async function carregarBancoEConfig() {
+    const [rCli, rAdv, rProc, rCron, rWh] = await Promise.all([
+      fetch('/api/config/clientes').then((r) => r.json()),
+      fetch('/api/config/advogados').then((r) => r.json()),
+      fetch('/api/processos').then((r) => r.json()),
+      fetch('/api/cron/radar?historico=true').then((r) => r.json()),
+      fetch('/api/webhooks').then((r) => r.json()),
+    ]);
+    if (rCli.sucesso) setClientesDb(rCli.clientes || []);
+    if (rAdv.sucesso) setAdvogadosDb(rAdv.advogados || []);
+    if (rProc.sucesso) setProcessosDb(rProc.processos || []);
+    if (rCron.sucesso) setExecucoesRadar(rCron.execucoes || []);
+    if (rWh.sucesso) setWebhooksDb(rWh.webhooks || []);
+  }
+
+  async function adicionarWebhookDb(e: React.FormEvent) {
+    e.preventDefault();
+    if (!novoWebhookNome.trim() || !novoWebhookUrl.trim()) return;
+    await fetch('/api/webhooks', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nome: novoWebhookNome,
+        canal: novoWebhookCanal,
+        urlDestino: novoWebhookUrl,
+      }),
+    });
+    setNovoWebhookNome('');
+    setNovoWebhookUrl('');
+    carregarBancoEConfig();
+  }
+
+  async function removerWebhookDb(id: string) {
+    await fetch(`/api/webhooks?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    carregarBancoEConfig();
+  }
+
+  async function gerarTokenMobileJwt() {
+    const res = await fetch('/api/auth/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        nome: 'App Mobile Radar Jurídico',
+        email: 'mobile@escritorio.com.br',
+        perfil: 'MOBILE_APP',
+      }),
+    });
+    const json = await res.json();
+    if (json.accessToken) setTokenJwtGerado(json.accessToken);
+  }
+
+  async function dispararVarreduraRadar() {
+    setRodandoCron(true);
+    try {
+      await fetch('/api/cron/radar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ diasRetroativos: 3 }),
+      });
+      await carregarBancoEConfig();
+    } finally {
+      setRodandoCron(false);
+    }
+  }
+
+  async function adicionarClienteDb(e: React.FormEvent) {
+    e.preventDefault();
+    if (!novoClienteNome.trim()) return;
+    await fetch('/api/config/clientes', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nome: novoClienteNome, cnpjs: novoClienteCnpj }),
+    });
+    setNovoClienteNome('');
+    setNovoClienteCnpj('');
+    carregarBancoEConfig();
+  }
+
+  async function removerClienteDb(id: string) {
+    await fetch(`/api/config/clientes?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    carregarBancoEConfig();
+  }
+
+  async function adicionarAdvogadoDb(e: React.FormEvent) {
+    e.preventDefault();
+    if (!novoAdvNome.trim() || !novoAdvOab.trim()) return;
+    await fetch('/api/config/advogados', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nome: novoAdvNome, numeroOab: novoAdvOab, ufOab: novoAdvUf }),
+    });
+    setNovoAdvNome('');
+    setNovoAdvOab('');
+    carregarBancoEConfig();
+  }
+
+  async function removerAdvogadoDb(id: string) {
+    await fetch(`/api/config/advogados?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    carregarBancoEConfig();
+  }
 
   async function executarBusca(e?: React.FormEvent) {
     if (e) e.preventDefault();
@@ -113,13 +319,56 @@ export default function RadarJuridicoHome() {
 
   async function inspecionarLinkTribunal(urlParaTestar: string) {
     setLinkInspecao(urlParaTestar);
-    const res = await fetch('/api/inspecionar-link', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url: urlParaTestar }),
-    });
-    const json = await res.json();
-    setResultadoLink(json);
+    setInspecionandoLink(true);
+    try {
+      const res = await fetch('/api/inspecionar-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: urlParaTestar }),
+      });
+      const json = await res.json();
+      setResultadoLink(json);
+    } finally {
+      setInspecionandoLink(false);
+    }
+  }
+
+  async function extrairDocumentoDoProcesso(url: string) {
+    setExtraindoUrl(url);
+    try {
+      const res = await fetch('/api/inspecionar-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url }),
+      });
+      const json = await res.json();
+      if (json.extracao) {
+        setDocumentosExtraidos((prev) => ({
+          ...prev,
+          [url]: json.extracao,
+        }));
+      }
+    } finally {
+      setExtraindoUrl(null);
+    }
+  }
+
+  async function consultarCapaDatajud(numeroProcesso: string, siglaTribunal?: string) {
+    setCarregandoDatajud(true);
+    try {
+      const params = new URLSearchParams({ numeroProcesso });
+      if (siglaTribunal) params.set('siglaTribunal', siglaTribunal);
+      const res = await fetch(`/api/datajud?${params.toString()}`);
+      const json = await res.json();
+      if (json.datajud) {
+        setDatajudPorProcesso((prev) => ({
+          ...prev,
+          [numeroProcesso]: json.datajud,
+        }));
+      }
+    } finally {
+      setCarregandoDatajud(false);
+    }
   }
 
   return (
@@ -169,6 +418,20 @@ export default function RadarJuridicoHome() {
             >
               <FileText className="w-3.5 h-3.5" />
               Feed de Publicações ({publicacoes.length})
+            </button>
+            <button
+              onClick={() => {
+                setAbaAtiva('BANCO_CONFIG');
+                carregarBancoEConfig();
+              }}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium transition flex items-center gap-1.5 ${
+                abaAtiva === 'BANCO_CONFIG'
+                  ? 'bg-indigo-600 text-white shadow'
+                  : 'text-slate-400 hover:text-white'
+              }`}
+            >
+              <Database className="w-3.5 h-3.5" />
+              Banco &amp; Config
             </button>
             <button
               onClick={() => setAbaAtiva('API_DOCS')}
@@ -249,13 +512,42 @@ export default function RadarJuridicoHome() {
 
           {modoBusca === 'INSPETOR_LINKS' ? (
             <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 space-y-2">
+              <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-xs text-amber-200 space-y-3">
                 <p className="font-semibold text-amber-300">
-                  Como a Loy Legal e a sua API usam os links de validação do PJe e eproc:
+                  Crawler de Inteiro Teor (PJe &amp; eproc) — Issue #3:
                 </p>
                 <p>
-                  Quando a sua API busca uma publicação no barramento nacional, o próprio retorno da publicação traz os links diretos de validação do documento assinado pelo juiz. Abaixo estão os 2 links que você enviou para testar a decodificação:
+                  Cole qualquer link de validação do PJe (<code className="text-amber-300">pjekz/validacao/...</code>) ou do eproc (<code className="text-amber-300">consulta_publica_documento</code>) para validar a assinatura digital, extrair o inteiro teor do PDF e baixar o documento original.
                 </p>
+
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <input
+                    type="url"
+                    value={linkInspecao}
+                    onChange={(e) => setLinkInspecao(e.target.value)}
+                    placeholder="https://pje.trt4.jus.br/pjekz/validacao/..."
+                    className="flex-1 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white font-mono focus:outline-none focus:border-amber-500"
+                  />
+                  <button
+                    type="button"
+                    disabled={inspecionandoLink}
+                    onClick={() => inspecionarLinkTribunal(linkInspecao)}
+                    className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-semibold text-xs flex items-center justify-center gap-2 transition cursor-pointer shrink-0"
+                  >
+                    {inspecionandoLink ? (
+                      <>
+                        <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        Extraindo...
+                      </>
+                    ) : (
+                      <>
+                        <FileCheck2 className="w-3.5 h-3.5" />
+                        Extrair Inteiro Teor
+                      </>
+                    )}
+                  </button>
+                </div>
+
                 <div className="flex flex-wrap gap-2 pt-1">
                   <button
                     type="button"
@@ -264,7 +556,7 @@ export default function RadarJuridicoHome() {
                         'https://pje.trt4.jus.br/pjekz/validacao/26111612374902100000201044828?instancia=1'
                       )
                     }
-                    className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-amber-500/40 text-amber-300 font-mono text-[11px]"
+                    className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-amber-500/40 text-amber-300 font-mono text-[11px] cursor-pointer"
                   >
                     Testar Link 1: TRT4 (pjekz/validacao)
                   </button>
@@ -275,18 +567,130 @@ export default function RadarJuridicoHome() {
                         'https://eproc.jfsc.jus.br/eprocV2/externo_controlador.php?acao=consulta_publica_documento&numProcesso=50099269520204047201&idDocumento=721794864303096789645203838960&hash=b7d0e09a4ce4fd5ccc8bf79144eeba813f19793d5060a35e22aae9f22d3ef0f7'
                       )
                     }
-                    className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-amber-500/40 text-amber-300 font-mono text-[11px]"
+                    className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-amber-500/40 text-amber-300 font-mono text-[11px] cursor-pointer"
                   >
                     Testar Link 2: JFSC (eprocV2/consulta_publica_documento)
                   </button>
                 </div>
               </div>
 
-              {resultadoLink && (
-                <div className="bg-slate-950 border border-slate-800 rounded-xl p-4 font-mono text-xs overflow-x-auto">
-                  <pre className="text-emerald-400">
-                    {JSON.stringify(resultadoLink, null, 2)}
-                  </pre>
+              {resultadoLink?.extracao && (
+                <div className="bg-slate-950 border border-slate-800 rounded-xl p-5 space-y-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="px-2.5 py-0.5 rounded bg-indigo-500/20 text-indigo-300 text-xs font-bold">
+                          {resultadoLink.sistemaDetectado}
+                        </span>
+                        {resultadoLink.extracao.statusExtracao === 'SUCESSO' && (
+                          <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-[11px] font-semibold">
+                            Extraído com Sucesso
+                          </span>
+                        )}
+                        {resultadoLink.extracao.statusExtracao === 'CAPTCHA_NECESSARIO' && (
+                          <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 border border-amber-500/30 text-[11px] font-semibold">
+                            Verificação Humana Exigida (CAPTCHA)
+                          </span>
+                        )}
+                        {(resultadoLink.extracao.statusExtracao === 'ERRO' ||
+                          resultadoLink.extracao.statusExtracao === 'INDISPONIVEL') && (
+                          <span className="px-2.5 py-0.5 rounded-full bg-rose-500/15 text-rose-300 border border-rose-500/30 text-[11px] font-semibold">
+                            {resultadoLink.extracao.statusExtracao}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-300">
+                        {resultadoLink.extracao.mensagem}
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2">
+                      {resultadoLink.extracao.temPdfDisponivel && (
+                        <a
+                          href={`/api/documentos/baixar?url=${encodeURIComponent(
+                            resultadoLink.extracao.urlOriginal
+                          )}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition"
+                        >
+                          <Download className="w-3.5 h-3.5" />
+                          Baixar PDF Assinado (
+                          {Math.round((resultadoLink.extracao.tamanhoPdfBytes || 0) / 1024)} KB)
+                        </a>
+                      )}
+                      <a
+                        href={resultadoLink.extracao.urlOriginal}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-medium transition"
+                      >
+                        Abrir no Tribunal <ExternalLink className="w-3.5 h-3.5" />
+                      </a>
+                    </div>
+                  </div>
+
+                  {resultadoLink.extracao.assinadoPor && (
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs">
+                      <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
+                        <span className="text-[10px] text-slate-400 uppercase block">
+                          Documento / Validação
+                        </span>
+                        <span className="text-white font-semibold">
+                          {resultadoLink.extracao.tituloDocumento} (
+                          {resultadoLink.extracao.resultadoValidacao})
+                        </span>
+                      </div>
+                      <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
+                        <span className="text-[10px] text-slate-400 uppercase block">
+                          Assinado Digitalmente Por
+                        </span>
+                        <span className="text-emerald-300 font-medium">
+                          {resultadoLink.extracao.assinadoPor}
+                        </span>
+                      </div>
+                      <div className="p-3 rounded-lg bg-slate-900 border border-slate-800">
+                        <span className="text-[10px] text-slate-400 uppercase block">
+                          Data/Hora Assinatura
+                        </span>
+                        <span className="text-slate-200 font-mono">
+                          {resultadoLink.extracao.dataHoraAssinatura}
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {resultadoLink.extracao.textoExtraido && (
+                    <div className="space-y-1.5">
+                      <span className="text-[11px] font-bold text-indigo-300 uppercase tracking-wider">
+                        Inteiro Teor Extraído ({resultadoLink.extracao.totalPaginas || 1} pág.)
+                      </span>
+                      <div className="text-xs text-slate-200 leading-relaxed whitespace-pre-wrap bg-slate-900/80 p-4 rounded-xl border border-slate-800 max-h-80 overflow-y-auto">
+                        {resultadoLink.extracao.textoExtraido}
+                      </div>
+                    </div>
+                  )}
+
+                  <details className="text-xs">
+                    <summary className="cursor-pointer text-slate-400 hover:text-slate-200">
+                      Ver metadados técnicos (JSON)
+                    </summary>
+                    <pre className="mt-2 text-emerald-400 font-mono text-[11px] overflow-x-auto bg-slate-900 p-3 rounded-lg border border-slate-800">
+                      {JSON.stringify(
+                        {
+                          ...resultadoLink,
+                          extracao: {
+                            ...resultadoLink.extracao,
+                            textoExtraido: resultadoLink.extracao.textoExtraido
+                              ? `[${resultadoLink.extracao.textoExtraido.length} caracteres]`
+                              : undefined,
+                          },
+                        },
+                        null,
+                        2
+                      )}
+                    </pre>
+                  </details>
                 </div>
               )}
             </div>
@@ -594,13 +998,20 @@ export default function RadarJuridicoHome() {
                           {proc.classeProcessual} • {proc.orgaoJulgador}
                         </p>
 
-                        <div className="mt-2.5 pt-2.5 border-t border-slate-800/80 flex items-center justify-between text-[11px]">
-                          <span className="text-indigo-300 font-medium">
-                            {proc.ultimoStatusDetectado}
+                        <div className="mt-2.5 pt-2.5 border-t border-slate-800/80 flex items-center justify-between gap-2 text-[11px]">
+                          <span className="text-indigo-300 font-medium truncate">
+                            {proc.faseProcessual || proc.ultimoStatusDetectado}
                           </span>
-                          <span className="text-slate-500">
-                            {proc.ultimaAtualizacao}
-                          </span>
+                          <div className="flex items-center gap-2 shrink-0">
+                            {proc.prazoFatal && (
+                              <span className="px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30 text-[10px] font-mono">
+                                Fatal: {proc.prazoFatal}
+                              </span>
+                            )}
+                            <span className="text-slate-500">
+                              {proc.ultimaAtualizacao}
+                            </span>
+                          </div>
                         </div>
                       </div>
                     );
@@ -628,14 +1039,27 @@ export default function RadarJuridicoHome() {
                       </p>
                     </div>
 
-                    <div className="text-right">
+                    <div className="text-right space-y-1">
                       <span className="text-[11px] text-slate-400 block">
-                        Status Automático do Processo
+                        Fase &amp; Status Automático
                       </span>
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-xs font-semibold mt-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        {processoSelecionado.ultimoStatusDetectado}
-                      </span>
+                      <div className="flex flex-wrap justify-end gap-1.5">
+                        {processoSelecionado.faseProcessual && (
+                          <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-slate-200 text-xs font-semibold">
+                            {processoSelecionado.faseProcessual}
+                          </span>
+                        )}
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/15 border border-indigo-500/30 text-indigo-300 text-xs font-semibold">
+                          <CheckCircle2 className="w-3.5 h-3.5" />
+                          {processoSelecionado.ultimoStatusDetectado}
+                        </span>
+                        {processoSelecionado.prazoFatal && (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-semibold">
+                            <Clock className="w-3.5 h-3.5" />
+                            Prazo Fatal: {processoSelecionado.prazoFatal}
+                          </span>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -705,27 +1129,272 @@ export default function RadarJuridicoHome() {
 
                   {/* Links de Documentos Originais do PJe / eproc */}
                   {processoSelecionado.linksDocumentosOriginais.length > 0 && (
-                    <div className="p-4 rounded-xl bg-indigo-950/20 border border-indigo-500/30 space-y-2">
+                    <div className="p-4 rounded-xl bg-indigo-950/20 border border-indigo-500/30 space-y-3">
                       <h4 className="text-xs font-bold text-indigo-300 flex items-center gap-1.5">
                         <Link2 className="w-4 h-4" />
-                        Links Diretos de Validação / Documento Original (PJe & eproc)
+                        Links Diretos de Validação / Documento Original (PJe &amp; eproc)
                       </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {processoSelecionado.linksDocumentosOriginais.map((lk, i) => (
-                          <a
-                            key={i}
-                            href={lk.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-200 text-xs transition"
-                          >
-                            <span>Abrir Inteiro Teor ({lk.sistema})</span>
-                            <ExternalLink className="w-3.5 h-3.5" />
-                          </a>
-                        ))}
+                      <div className="space-y-3">
+                        {processoSelecionado.linksDocumentosOriginais.map((lk, i) => {
+                          const docExtraido = documentosExtraidos[lk.url];
+                          const carregandoDoc = extraindoUrl === lk.url;
+                          return (
+                            <div key={i} className="space-y-2">
+                              <div className="flex flex-wrap gap-2">
+                                <button
+                                  type="button"
+                                  disabled={carregandoDoc}
+                                  onClick={() => extrairDocumentoDoProcesso(lk.url)}
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 disabled:opacity-50 border border-emerald-500/40 text-emerald-200 text-xs transition cursor-pointer"
+                                >
+                                  {carregandoDoc ? (
+                                    <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                                  ) : (
+                                    <FileCheck2 className="w-3.5 h-3.5" />
+                                  )}
+                                  <span>
+                                    {carregandoDoc
+                                      ? 'Extraindo Inteiro Teor...'
+                                      : `Extrair Inteiro Teor (${lk.sistema})`}
+                                  </span>
+                                </button>
+                                <a
+                                  href={lk.url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-indigo-200 text-xs transition"
+                                >
+                                  <span>Abrir no Tribunal ({lk.sistema})</span>
+                                  <ExternalLink className="w-3.5 h-3.5" />
+                                </a>
+                              </div>
+
+                              {docExtraido && (
+                                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-2 text-xs">
+                                  <div className="flex flex-wrap items-center justify-between gap-2">
+                                    <span className="font-semibold text-emerald-300">
+                                      {docExtraido.tituloDocumento || docExtraido.sistema} —{' '}
+                                      {docExtraido.statusExtracao}
+                                    </span>
+                                    {docExtraido.temPdfDisponivel && (
+                                      <a
+                                        href={`/api/documentos/baixar?url=${encodeURIComponent(
+                                          docExtraido.urlOriginal
+                                        )}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="inline-flex items-center gap-1 text-emerald-400 hover:underline font-medium"
+                                      >
+                                        <Download className="w-3 h-3" /> Baixar PDF
+                                      </a>
+                                    )}
+                                  </div>
+                                  {docExtraido.assinadoPor && (
+                                    <p className="text-[11px] text-slate-400">
+                                      Assinado por: {docExtraido.assinadoPor} em{' '}
+                                      {docExtraido.dataHoraAssinatura}
+                                    </p>
+                                  )}
+                                  {docExtraido.textoExtraido ? (
+                                    <div className="text-slate-200 whitespace-pre-wrap bg-slate-900/70 p-3 rounded-lg border border-slate-800 max-h-56 overflow-y-auto">
+                                      {docExtraido.textoExtraido}
+                                    </div>
+                                  ) : (
+                                    <p className="text-amber-300">{docExtraido.mensagem}</p>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
                   )}
+
+                  {/* Enriquecimento Datajud CNJ (Capa & Movimentações TPU) */}
+                  <div className="p-4 rounded-xl bg-slate-950/70 border border-slate-800 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h4 className="text-xs font-bold text-cyan-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <Scale className="w-3.5 h-3.5" />
+                        Capa &amp; Movimentações Completas (Datajud CNJ)
+                      </h4>
+                      <button
+                        type="button"
+                        disabled={carregandoDatajud}
+                        onClick={() =>
+                          consultarCapaDatajud(
+                            processoSelecionado.numeroProcesso,
+                            processoSelecionado.siglaTribunal
+                          )
+                        }
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 disabled:opacity-50 border border-cyan-500/40 text-cyan-200 text-xs font-medium transition cursor-pointer"
+                      >
+                        {carregandoDatajud ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-3.5 h-3.5" />
+                        )}
+                        <span>
+                          {carregandoDatajud
+                            ? 'Consultando Datajud...'
+                            : datajudPorProcesso[processoSelecionado.numeroProcesso]
+                            ? 'Atualizar Datajud'
+                            : 'Carregar Capa & Andamentos'}
+                        </span>
+                      </button>
+                    </div>
+
+                    {datajudPorProcesso[processoSelecionado.numeroProcesso] && (() => {
+                      const dj = datajudPorProcesso[processoSelecionado.numeroProcesso];
+                      if (!dj.encontrado) {
+                        return (
+                          <p className="text-xs text-amber-300">
+                            {dj.mensagem || 'Processo não encontrado no índice público do Datajud.'}
+                          </p>
+                        );
+                      }
+                      return (
+                        <div className="space-y-3 text-xs">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                            <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
+                              <span className="text-[10px] text-slate-400 block">
+                                Data de Ajuizamento
+                              </span>
+                              <span className="text-white font-semibold">
+                                {dj.dataAjuizamento || 'Não informada'}
+                              </span>
+                            </div>
+                            <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
+                              <span className="text-[10px] text-slate-400 block">
+                                Grau / Sistema
+                              </span>
+                              <span className="text-white font-semibold">
+                                {dj.grau || '-'} • {dj.sistema?.nome || '-'} ({dj.formato?.nome || '-'})
+                              </span>
+                            </div>
+                            <div className="p-2.5 rounded-lg bg-slate-900 border border-slate-800">
+                              <span className="text-[10px] text-slate-400 block">
+                                Total de Movimentos (TPU)
+                              </span>
+                              <span className="text-cyan-300 font-bold">
+                                {dj.totalMovimentos} andamentos
+                              </span>
+                            </div>
+                          </div>
+
+                          {dj.assuntos.length > 0 && (
+                            <div className="flex flex-wrap gap-1.5">
+                              {dj.assuntos.map((a, idx) => (
+                                <span
+                                  key={idx}
+                                  className="px-2 py-0.5 rounded bg-cyan-950/60 border border-cyan-500/30 text-cyan-200 text-[11px]"
+                                >
+                                  {a.nome} (TPU {a.codigo})
+                                </span>
+                              ))}
+                            </div>
+                          )}
+
+                          {dj.movimentos.length > 0 && (
+                            <div className="max-h-56 overflow-y-auto space-y-1.5 pr-1">
+                              {dj.movimentos.slice(0, 20).map((mov, idx) => (
+                                <div
+                                  key={idx}
+                                  className="p-2.5 rounded-lg bg-slate-900/70 border border-slate-800/80 flex items-start justify-between gap-3"
+                                >
+                                  <div>
+                                    <p className="text-slate-200 font-medium">
+                                      {mov.nome}{' '}
+                                      <span className="text-[10px] text-slate-500 font-mono">
+                                        #{mov.codigo}
+                                      </span>
+                                    </p>
+                                    {mov.complementosTabelados && mov.complementosTabelados.length > 0 && (
+                                      <p className="text-[11px] text-slate-400">
+                                        {mov.complementosTabelados
+                                          .map((c) => `${c.descricao}: ${c.nome}`)
+                                          .join(' • ')}
+                                      </p>
+                                    )}
+                                  </div>
+                                  <span className="text-[11px] text-slate-400 font-mono shrink-0">
+                                    {mov.dataHora?.slice(0, 10)}
+                                  </span>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Auditoria & Resumo com IA Jurídica (Issue #8) */}
+                  <div className="p-4 rounded-xl bg-purple-950/20 border border-purple-500/30 space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <h4 className="text-xs font-bold text-purple-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <Sparkles className="w-3.5 h-3.5" />
+                        IA Jurídica — Resumo &amp; Auditoria da Concorrência
+                      </h4>
+                      <button
+                        type="button"
+                        disabled={analisandoIA}
+                        onClick={() => analisarProcessoComIA(processoSelecionado)}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-600/25 hover:bg-purple-600/35 disabled:opacity-50 border border-purple-500/40 text-purple-200 text-xs font-medium transition cursor-pointer"
+                      >
+                        {analisandoIA ? (
+                          <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                        ) : (
+                          <Sparkles className="w-3.5 h-3.5" />
+                        )}
+                        <span>
+                          {analisandoIA
+                            ? 'Analisando...'
+                            : analiseIAPorProcesso[processoSelecionado.numeroProcesso]
+                            ? 'Reanalisar com IA'
+                            : 'Gerar Resumo & Auditoria IA'}
+                        </span>
+                      </button>
+                    </div>
+
+                    {analiseIAPorProcesso[processoSelecionado.numeroProcesso] && (() => {
+                      const ia = analiseIAPorProcesso[processoSelecionado.numeroProcesso];
+                      return (
+                        <div className="space-y-3 text-xs bg-slate-950/90 p-4 rounded-xl border border-slate-800">
+                          <div className="flex flex-wrap items-center justify-between gap-2">
+                            <span className="px-2 py-0.5 rounded bg-rose-500/15 text-rose-300 border border-rose-500/30 font-bold text-[10px]">
+                              Risco: {ia.nivelRisco}
+                            </span>
+                            <span className="text-[10px] font-mono text-slate-400">
+                              Motor: {ia.modo}
+                            </span>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 uppercase block mb-0.5">
+                              Resumo Executivo (2 linhas)
+                            </span>
+                            <p className="text-slate-100 leading-relaxed">{ia.resumoExecutivo}</p>
+                          </div>
+                          <div>
+                            <span className="text-[10px] text-slate-400 uppercase block mb-1">
+                              Riscos / Falhas Detectadas
+                            </span>
+                            <ul className="list-disc list-inside space-y-0.5 text-amber-300">
+                              {ia.falhasOuRiscosDetectados.map((r, idx) => (
+                                <li key={idx}>{r}</li>
+                              ))}
+                            </ul>
+                          </div>
+                          <div className="p-2.5 rounded-lg bg-emerald-950/30 border border-emerald-500/30 text-emerald-200">
+                            <span className="text-[10px] font-bold uppercase block text-emerald-400 mb-0.5">
+                              Recomendação Estratégica
+                            </span>
+                            {ia.oportunidadeComercial}
+                          </div>
+                        </div>
+                      );
+                    })()}
+                  </div>
 
                   {/* Linha do Tempo de Publicações do Processo */}
                   <div className="space-y-3">
@@ -806,6 +1475,358 @@ export default function RadarJuridicoHome() {
                 </p>
               </div>
             ))}
+          </section>
+        )}
+
+        {/* CONTEÚDO DA ABA: BANCO & CONFIGURAÇÕES (ISSUE #5) */}
+        {abaAtiva === 'BANCO_CONFIG' && (
+          <section className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Advogados do Nosso Escritório */}
+              <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-4">
+                <div>
+                  <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Users className="w-4 h-4 text-emerald-400" />
+                    OABs do Nosso Escritório (Salvas no SQLite)
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Toda busca na API cruza automaticamente com estas OABs para detectar processos do escritório vs. concorrência.
+                  </p>
+                </div>
+
+                <form onSubmit={adicionarAdvogadoDb} className="grid grid-cols-12 gap-2">
+                  <input
+                    type="text"
+                    value={novoAdvNome}
+                    onChange={(e) => setNovoAdvNome(e.target.value)}
+                    placeholder="Nome do advogado"
+                    className="col-span-5 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white"
+                  />
+                  <input
+                    type="text"
+                    value={novoAdvOab}
+                    onChange={(e) => setNovoAdvOab(e.target.value)}
+                    placeholder="Nº OAB"
+                    className="col-span-3 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white"
+                  />
+                  <input
+                    type="text"
+                    maxLength={2}
+                    value={novoAdvUf}
+                    onChange={(e) => setNovoAdvUf(e.target.value.toUpperCase())}
+                    placeholder="UF"
+                    className="col-span-2 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white uppercase"
+                  />
+                  <button
+                    type="submit"
+                    className="col-span-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center justify-center cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </form>
+
+                <div className="space-y-2 max-h-52 overflow-y-auto">
+                  {advogadosDb.length === 0 ? (
+                    <p className="text-xs text-slate-500">Nenhuma OAB cadastrada ainda.</p>
+                  ) : (
+                    advogadosDb.map((adv) => (
+                      <div
+                        key={adv.id}
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs"
+                      >
+                        <div>
+                          <span className="text-white font-medium">{adv.nome}</span>
+                          <span className="ml-2 font-mono text-emerald-400">
+                            OAB/{adv.ufOab} {adv.numeroOab}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removerAdvogadoDb(adv.id)}
+                          className="text-slate-500 hover:text-rose-400 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              {/* Clientes Monitorados */}
+              <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-4">
+                <div>
+                  <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Building2 className="w-4 h-4 text-indigo-400" />
+                    Clientes Monitorados (Radar Corporativo)
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Empresas salvas para monitoramento contínuo (ex: LG ELECTRONICS).
+                  </p>
+                </div>
+
+                <form onSubmit={adicionarClienteDb} className="grid grid-cols-12 gap-2">
+                  <input
+                    type="text"
+                    value={novoClienteNome}
+                    onChange={(e) => setNovoClienteNome(e.target.value)}
+                    placeholder="Razão Social / Nome (ex: LG ELECTRONICS)"
+                    className="col-span-6 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white"
+                  />
+                  <input
+                    type="text"
+                    value={novoClienteCnpj}
+                    onChange={(e) => setNovoClienteCnpj(e.target.value)}
+                    placeholder="CNPJ (opcional)"
+                    className="col-span-4 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white"
+                  />
+                  <button
+                    type="submit"
+                    className="col-span-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center justify-center cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </form>
+
+                <div className="space-y-2 max-h-52 overflow-y-auto">
+                  {clientesDb.length === 0 ? (
+                    <p className="text-xs text-slate-500">Nenhum cliente cadastrado ainda.</p>
+                  ) : (
+                    clientesDb.map((cli) => (
+                      <div
+                        key={cli.id}
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs"
+                      >
+                        <div>
+                          <span className="text-white font-medium">{cli.nome}</span>
+                          {cli.cnpjs && (
+                            <span className="ml-2 font-mono text-slate-400">{cli.cnpjs}</span>
+                          )}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removerClienteDb(cli.id)}
+                          className="text-slate-500 hover:text-rose-400 cursor-pointer"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Worker / Cron Radar 24/7 (Issue #7) */}
+            <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-4">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-amber-400" />
+                    Radar 24/7 — Varredura Automática (Worker / Cron)
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Varre todos os Clientes Monitorados e OABs salvas via <code className="text-amber-300">GET/POST /api/cron/radar</code> (agendado a cada 4h no <code className="text-amber-300">vercel.json</code>).
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  disabled={rodandoCron}
+                  onClick={dispararVarreduraRadar}
+                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-semibold text-xs flex items-center gap-2 transition cursor-pointer"
+                >
+                  {rodandoCron ? (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                      Varrendo Tribunais...
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="w-3.5 h-3.5" />
+                      Disparar Varredura Agora
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {execucoesRadar.length > 0 && (
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {execucoesRadar.map((ex) => (
+                    <div
+                      key={ex.id}
+                      className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded bg-slate-800 text-amber-300 font-mono text-[10px]">
+                          {ex.origem}
+                        </span>
+                        <span className="text-emerald-400 font-semibold">{ex.status}</span>
+                        <span className="text-slate-300">
+                          {ex.clientesVarredura} clientes • {ex.oabsVarredura} OABs →{' '}
+                          <strong>{ex.publicacoesEncontradas}</strong> pub. /{' '}
+                          <strong>{ex.processosSalvos}</strong> proc.
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {ex.alertasAlta > 0 && (
+                          <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 text-[10px] font-bold">
+                            {ex.alertasAlta} alta urgência
+                          </span>
+                        )}
+                        <span className="text-slate-500 font-mono text-[11px]">
+                          {new Date(ex.iniciadoEm).toLocaleString('pt-BR')}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Webhooks & App Mobile JWT (Issue #9) */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-4">
+                <div>
+                  <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                    <ShieldAlert className="w-4 h-4 text-rose-400" />
+                    Webhooks de Alerta Imediato (WhatsApp / Push / Slack)
+                  </h2>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Disparados automaticamente sempre que surgir uma publicação de urgência <strong>ALTA</strong>.
+                  </p>
+                </div>
+
+                <form onSubmit={adicionarWebhookDb} className="grid grid-cols-12 gap-2">
+                  <input
+                    type="text"
+                    value={novoWebhookNome}
+                    onChange={(e) => setNovoWebhookNome(e.target.value)}
+                    placeholder="Nome (ex: WhatsApp Sócio)"
+                    className="col-span-4 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white"
+                  />
+                  <select
+                    value={novoWebhookCanal}
+                    onChange={(e) => setNovoWebhookCanal(e.target.value)}
+                    className="col-span-3 px-2 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white"
+                  >
+                    <option value="WHATSAPP">WhatsApp</option>
+                    <option value="PUSH">Push Mobile</option>
+                    <option value="SLACK">Slack</option>
+                    <option value="WEBHOOK">HTTP POST</option>
+                  </select>
+                  <input
+                    type="url"
+                    value={novoWebhookUrl}
+                    onChange={(e) => setNovoWebhookUrl(e.target.value)}
+                    placeholder="https://..."
+                    className="col-span-3 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white"
+                  />
+                  <button
+                    type="submit"
+                    className="col-span-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center justify-center cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" />
+                  </button>
+                </form>
+
+                <div className="space-y-2 max-h-40 overflow-y-auto">
+                  {webhooksDb.length === 0 ? (
+                    <p className="text-xs text-slate-500">Nenhum webhook cadastrado.</p>
+                  ) : (
+                    webhooksDb.map((wh) => (
+                      <div
+                        key={wh.id}
+                        className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs"
+                      >
+                        <div className="truncate pr-2">
+                          <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-mono text-[10px] mr-2">
+                            {wh.canal}
+                          </span>
+                          <span className="text-white font-medium">{wh.nome}</span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => removerWebhookDb(wh.id)}
+                          className="text-slate-500 hover:text-rose-400 cursor-pointer shrink-0"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-4">
+                <div className="flex items-center justify-between gap-2">
+                  <div>
+                    <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                      <Code2 className="w-4 h-4 text-indigo-400" />
+                      Autenticação JWT para App Mobile
+                    </h2>
+                    <p className="text-xs text-slate-400 mt-0.5">
+                      Gere um token Bearer HS256 via <code className="text-indigo-300">POST /api/auth/token</code>.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={gerarTokenMobileJwt}
+                    className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold cursor-pointer shrink-0"
+                  >
+                    Gerar JWT
+                  </button>
+                </div>
+
+                {tokenJwtGerado && (
+                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-emerald-400 break-all">
+                    Authorization: Bearer {tokenJwtGerado}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Processos Persistidos no Banco */}
+            <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <h2 className="text-sm font-bold text-white flex items-center gap-2">
+                  <Database className="w-4 h-4 text-cyan-400" />
+                  Processos Persistidos Automaticamente no Banco ({processosDb.length})
+                </h2>
+                <button
+                  type="button"
+                  onClick={carregarBancoEConfig}
+                  className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs text-slate-300 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" /> Atualizar
+                </button>
+              </div>
+
+              {processosDb.length === 0 ? (
+                <p className="text-xs text-slate-500">
+                  Nenhum processo salvo ainda. Ao disparar uma busca na aba Radar de Cliente, OAB ou Processo, as pastas são gravadas automaticamente no SQLite.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  {processosDb.map((p) => (
+                    <div
+                      key={p.id}
+                      className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5 text-xs"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="px-2 py-0.5 rounded bg-slate-800 text-indigo-300 font-bold text-[10px]">
+                          {p.siglaTribunal}
+                        </span>
+                        <span className="text-[10px] text-slate-400">
+                          {p._count?.publicacoes || 0} pub. • {p._count?.documentos || 0} doc.
+                        </span>
+                      </div>
+                      <p className="font-mono font-bold text-white">{p.numeroFormatado}</p>
+                      <p className="text-[11px] text-indigo-300">{p.ultimoStatusDetectado}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
           </section>
         )}
 

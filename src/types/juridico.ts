@@ -55,7 +55,9 @@ export interface AnaliseInteligencia {
   }>;
   alertasAutomaticos: {
     tipoAtoDetectado: string;
+    faseProcessual?: string;
     prazoDetectado?: string;
+    prazoFatal?: string;
     audienciaDetectada?: string;
     valorDetectado?: string;
     urgencia: 'ALTA' | 'MEDIA' | 'NORMAL';
@@ -77,8 +79,63 @@ export interface ProcessoAutoGerido {
   statusConcorrencia: AnaliseInteligencia['statusConcorrencia'];
   ultimaAtualizacao: string;
   ultimoStatusDetectado: string;
+  faseProcessual?: string;
+  prazoFatal?: string;
   urgenciaMaxima: 'ALTA' | 'MEDIA' | 'NORMAL';
   totalPublicacoes: number;
   linksDocumentosOriginais: AnaliseInteligencia['linksValidacao'];
   historicoPublicacoes: PublicacaoEnriquecida[];
+}
+
+export interface ResultadoExtracaoDocumento {
+  sistema: 'PJE' | 'EPROC' | 'OUTRO';
+  statusExtracao: 'SUCESSO' | 'CAPTCHA_NECESSARIO' | 'INDISPONIVEL' | 'ERRO';
+  urlOriginal: string;
+  endpointConsultado?: string;
+  tituloDocumento?: string;
+  resultadoValidacao?: string;
+  assinadoPor?: string;
+  dataHoraAssinatura?: string;
+  algoritmoAssinatura?: string;
+  totalPaginas?: number;
+  tamanhoPdfBytes?: number;
+  temPdfDisponivel: boolean;
+  textoExtraido?: string;
+  alertasDoDocumento?: AnaliseInteligencia['alertasAutomaticos'];
+  mensagem: string;
+}
+
+export interface MovimentoDatajud {
+  codigo: number;
+  nome: string;
+  dataHora: string;
+  orgaoJulgador?: {
+    codigo?: string | number;
+    nome?: string;
+  };
+  complementosTabelados?: Array<{
+    codigo: number;
+    descricao: string;
+    valor: number | string;
+    nome: string;
+  }>;
+}
+
+export interface DadosDatajud {
+  encontrado: boolean;
+  indiceConsultado: string;
+  numeroProcesso: string;
+  tribunal?: string;
+  grau?: string;
+  classe?: { codigo: number; nome: string };
+  assuntos: Array<{ codigo: number; nome: string }>;
+  dataAjuizamento?: string;
+  dataHoraUltimaAtualizacao?: string;
+  orgaoJulgador?: { codigo: number; nome: string; codigoMunicipioIBGE?: number };
+  sistema?: { codigo: number; nome: string };
+  formato?: { codigo: number; nome: string };
+  nivelSigilo?: number;
+  totalMovimentos: number;
+  movimentos: MovimentoDatajud[];
+  mensagem?: string;
 }

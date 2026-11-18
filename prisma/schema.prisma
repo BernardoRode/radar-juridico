@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model ClienteMonitorado {
+  id           String   @id @default(cuid())
+  nome         String
+  variacoes    String?  // Variações de razão social separadas por vírgula
+  cnpjs        String?  // CNPJs separados por vírgula
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+}
+
+model AdvogadoEscritorio {
+  id           String   @id @default(cuid())
+  nome         String
+  numeroOab    String
+  ufOab        String
+  ativo        Boolean  @default(true)
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  @@unique([numeroOab, ufOab])
+}
+
+model Processo {
+  id                    String   @id @default(cuid())
+  numeroProcesso        String   @unique // 20 dígitos sem máscara
+  numeroFormatado       String
+  siglaTribunal         String
+  orgaoJulgador         String
+  classeProcessual      String
+  statusConcorrencia    String   // NOSSO_ESCRITORIO | ESCRITORIO_CONCORRENTE | SEM_ADVOGADO_CADASTRADO
+  ultimoStatusDetectado String
+  faseProcessual        String   @default("ANDAMENTO")
+  prazoFatal            String?
+  urgenciaMaxima        String   // ALTA | MEDIA | NORMAL
+  ultimaAtualizacao     String
+  partesJson            String?  // JSON serializado das partes
+  advogadosJson         String?  // JSON serializado dos advogados identificados
+  dataAjuizamento       String?  // Enriquecido via Datajud
+  assuntosJson          String?  // Enriquecido via Datajud
+  criadoEm              DateTime @default(now())
+  atualizadoEm          DateTime @updatedAt
+
+  publicacoes Publicacao[]
+  documentos  DocumentoOriginal[]
+}
+
+model Publicacao {
+  id                 String   @id @default(cuid())
+  cnjId              Int      @unique
+  processoId         String
+  processo           Processo @relation(fields: [processoId], references: [id], onDelete: Cascade)
+  dataDisponibilizacao String
+  tipoComunicacao    String
+  nomeOrgao          String
+  texto              String
+  linkOriginal       String?
+  tipoAtoDetectado   String
+  faseProcessual     String   @default("ANDAMENTO")
+  prazoDetectado     String?
+  prazoFatal         String?
+  audienciaDetectada String?
+  valorDetectado     String?
+  urgencia           String
+  statusConcorrencia String
+  criadoEm           DateTime @default(now())
+}
+
+model DocumentoOriginal {
+  id                 String    @id @default(cuid())
+  processoId         String?
+  processo           Processo? @relation(fields: [processoId], references: [id], onDelete: SetNull)
+  urlOriginal        String    @unique
+  sistema            String    // PJE | EPROC | OUTRO
+  statusExtracao     String    // SUCESSO | CAPTCHA_NECESSARIO | INDISPONIVEL | ERRO
+  tituloDocumento    String?
+  resultadoValidacao String?
+  assinadoPor        String?
+  dataHoraAssinatura String?
+  totalPaginas       Int?
+  tamanhoPdfBytes    Int?
+  textoExtraido      String?
+  criadoEm           DateTime  @default(now())
+  atualizadoEm       DateTime  @updatedAt
+}
+
+model ExecucaoRadar {
+  id                    String    @id @default(cuid())
+  origem                String    @default("MANUAL") // MANUAL | CRON
+  clientesVarredura     Int       @default(0)
+  oabsVarredura         Int       @default(0)
+  publicacoesEncontradas Int      @default(0)
+  processosSalvos       Int       @default(0)
+  alertasAlta           Int       @default(0)
+  status                String    @default("SUCESSO") // SUCESSO | PARCIAL | ERRO
+  detalhesJson          String?
+  iniciadoEm            DateTime  @default(now())
+  finalizadoEm          DateTime?
+}
+
+model WebhookAlerta {
+  id         String   @id @default(cuid())
+  nome       String
+  canal      String   @default("WEBHOOK") // WEBHOOK | WHATSAPP | PUSH | SLACK
+  urlDestino String
+  ativo      Boolean  @default(true)
+  criadoEm   DateTime @default(now())
+}

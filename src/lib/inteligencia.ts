@@ -4,6 +4,11 @@ import {
   ProcessoAutoGerido,
   PublicacaoEnriquecida,
 } from '@/types/juridico';
+import {
+  calcularPrazoFatal,
+  classificarFaseProcessual,
+  LABEL_FASE_PROCESSUAL,
+} from '@/lib/auto-update';
 
 /**
  * Extrai links diretos de validação de documentos do PJe (pjekz/validacao)
@@ -63,7 +68,8 @@ export function extrairLinksValidacao(
  */
 export function extrairAlertasTexto(
   texto: string,
-  tipoComunicacao?: string
+  tipoComunicacao?: string,
+  dataDisponibilizacao?: string
 ): AnaliseInteligencia['alertasAutomaticos'] {
   const t = (texto || '').toLowerCase();
 
@@ -111,9 +117,15 @@ export function extrairAlertasTexto(
     urgencia = 'MEDIA';
   }
 
+  const faseCodigo = classificarFaseProcessual(texto, tipoComunicacao);
+  const faseProcessual = LABEL_FASE_PROCESSUAL[faseCodigo];
+  const calculoPrazo = calcularPrazoFatal(dataDisponibilizacao, prazoDetectado);
+
   return {
     tipoAtoDetectado,
+    faseProcessual,
     prazoDetectado,
+    prazoFatal: calculoPrazo?.dataFatalFormatada,
     audienciaDetectada,
     valorDetectado,
     urgencia,
@@ -162,7 +174,11 @@ export function enriquecerComunicacao(
   }
 
   const linksValidacao = extrairLinksValidacao(com.texto, com.link);
-  const alertasAutomaticos = extrairAlertasTexto(com.texto, com.tipoComunicacao);
+  const alertasAutomaticos = extrairAlertasTexto(
+    com.texto,
+    com.tipoComunicacao,
+    com.data_disponibilizacao
+  );
 
   return {
     ...com,
@@ -201,6 +217,8 @@ export function consolidarProcessosAutomaticamente(
         statusConcorrencia: pub.inteligencia.statusConcorrencia,
         ultimaAtualizacao: pub.data_disponibilizacao,
         ultimoStatusDetectado: pub.inteligencia.alertasAutomaticos.tipoAtoDetectado,
+        faseProcessual: pub.inteligencia.alertasAutomaticos.faseProcessual,
+        prazoFatal: pub.inteligencia.alertasAutomaticos.prazoFatal,
         urgenciaMaxima: pub.inteligencia.alertasAutomaticos.urgencia,
         totalPublicacoes: 1,
         linksDocumentosOriginais: [...pub.inteligencia.linksValidacao],
@@ -240,6 +258,13 @@ export function consolidarProcessosAutomaticamente(
       const peso = { ALTA: 3, MEDIA: 2, NORMAL: 1 };
       if (peso[pub.inteligencia.alertasAutomaticos.urgencia] > peso[existente.urgenciaMaxima]) {
         existente.urgenciaMaxima = pub.inteligencia.alertasAutomaticos.urgencia;
+      }
+
+      if (!existente.prazoFatal && pub.inteligencia.alertasAutomaticos.prazoFatal) {
+        existente.prazoFatal = pub.inteligencia.alertasAutomaticos.prazoFatal;
+      }
+      if (pub.inteligencia.alertasAutomaticos.faseProcessual && existente.faseProcessual === 'Andamento / Despacho') {
+        existente.faseProcessual = pub.inteligencia.alertasAutomaticos.faseProcessual;
       }
     }
   }

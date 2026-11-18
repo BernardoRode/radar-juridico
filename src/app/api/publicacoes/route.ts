@@ -3,6 +3,10 @@ import {
   consolidarProcessosAutomaticamente,
   enriquecerComunicacao,
 } from '@/lib/inteligencia';
+import {
+  obterOabsEscritorio,
+  salvarRadarNoBanco,
+} from '@/lib/persistencia';
 import { ComunicacaoCNJ } from '@/types/juridico';
 
 const CNJ_API_URL = 'https://comunicaapi.pje.jus.br/api/v1/comunicacao';
@@ -27,10 +31,16 @@ export async function GET(request: NextRequest) {
     // Lista de OABs do nosso escritório (separadas por vírgula) para o motor de inteligência
     // detectar automaticamente se um processo da "LG" está conosco ou com um escritório concorrente!
     const nossasOabsParam = searchParams.get('nossasOabs') || '';
-    const nossasOabs = nossasOabsParam
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const oabsBanco = await obterOabsEscritorio();
+    const nossasOabs = Array.from(
+      new Set([
+        ...oabsBanco,
+        ...nossasOabsParam
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean),
+      ])
+    );
 
     if (numeroOab && !nossasOabs.includes(numeroOab)) {
       nossasOabs.push(`${numeroOab}${ufOab || ''}`);
@@ -89,6 +99,12 @@ export async function GET(request: NextRequest) {
     // Consolida automaticamente as pastas dos processos (Zero trabalho manual)
     const processosConsolidados = consolidarProcessosAutomaticamente(publicacoesEnriquecidas);
 
+    // Persiste automaticamente no banco SQLite/Prisma (Issue #5)
+    const persistir = searchParams.get('persistir') !== 'false';
+    const persistencia = persistir
+      ? await salvarRadarNoBanco(processosConsolidados)
+      : { processosSalvos: 0, publicacoesSalvas: 0 };
+
     // Resumo executivo de inteligência
     const resumo = {
       totalPublicacoesRetornadas: publicacoesEnriquecidas.length,
@@ -111,6 +127,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       sucesso: true,
       endpointConsultado: targetUrl,
+      oabsConsideradas: nossasOabs,
+      persistencia,
       resumo,
       processosConsolidados,
       publicacoes: publicacoesEnriquecidas,
