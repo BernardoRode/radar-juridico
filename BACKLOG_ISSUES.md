@@ -349,3 +349,144 @@ Varredura complementar das críticas de advogados em redes sociais e avaliaçõe
 - **Status:** ✅ Concluído (extração de `assinadoPor` ICP-Brasil em [src/lib/crawler-documentos.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/crawler-documentos.ts) e persistência em `DocumentoOriginal`)
 - **Dor Real:** O advogado prepara uma estratégia baseada no juiz titular da Vara, mas quem assina o despacho/sentença é um juiz substituto ou recém-transferido com entendimento totalmente oposto.
 - **Solução no Radar:** Como a Issue #3 extrai o campo exato `assinadoPor` do certificado digital ICP-Brasil do PDF do PJe, o sistema registra o histórico de **qual magistrado assinou cada ato** naquela Vara e alerta quando há troca de juiz no processo!
+
+
+---
+
+## Fase 11: Prontidão para Produção, Banco em Nuvem, IA Real & Segurança (Auditoria Técnica)
+
+Issues identificadas na auditoria do código atual para transformar o MVP local (com fallbacks/templates e SQLite) em um sistema pronto para uso real em produção:
+
+### Issue #66: [Infra / Database] Migração de SQLite para PostgreSQL (Neon / Supabase) + Prisma Migrations
+- **Status:** 📋? Conclu?do
+- **Prioridade:** P0 (Crítica para deploy em nuvem)
+- **Diagnóstico Atual:** O `prisma/schema.prisma` usa `provider = "sqlite"` (`file:./dev.db`). Funciona apenas localmente; em ambientes serverless como a Vercel o disco é efêmero e não persiste dados.
+- **Objetivo:** Preparar o banco de dados para produção com PostgreSQL gerenciado, versionamento de schema via migrations e seed inicial.
+- **Critérios de Aceite:**
+  - [ ] Atualizar `prisma/schema.prisma` para suportar PostgreSQL (`DATABASE_URL` com pooler e `DIRECT_URL` para migrations).
+  - [ ] Gerar histórico inicial em `prisma/migrations/`.
+  - [ ] Criar script `prisma/seed.ts` opcional para carga inicial de exemplo ou configuração base.
+  - [ ] Documentar no `AGENTS.md` e `.env.example` o passo a passo de conexão com Neon/Supabase.
+
+### Issue #67: [Onboarding & Configuração] Arquivo `.env.example` + Painel de Diagnóstico de Ambiente na UI
+- **Status:** 📋? Conclu?do
+- **Prioridade:** P0 (Crítica para setup)
+- **Diagnóstico Atual:** Não existe `.env.example` no repositório e a interface não informa ao usuário o que está configurado de verdade vs. rodando em fallback (ex.: IA heurística sem API key, banco vazio sem OABs/clientes, webhooks não cadastrados).
+- **Objetivo:** Guiar o usuário no primeiro acesso com um checklist visual de status do ambiente.
+- **Critérios de Aceite:**
+  - [ ] Criar `.env.example` completo com todas as variáveis suportadas (`DATABASE_URL`, `GEMINI_API_KEY`, `OPENAI_API_KEY`, `DATAJUD_API_KEY`, `JWT_SECRET`, `CRON_SECRET`, `WEBHOOK_HMAC_SECRET`, `API_ACCESS_KEY`).
+  - [ ] Criar endpoint `GET /api/config/status` (sem vazar segredos) informando: banco conectado, total de OABs/clientes cadastrados, provedor de IA ativo (`GEMINI`, `OPENAI` ou `HEURISTICA`), webhooks ativos e segredos configurados.
+  - [ ] Exibir banner/wizard de onboarding na interface quando OABs ou clientes estiverem vazios ou a IA estiver em modo heurístico.
+
+### Issue #68: [IA / Copiloto de Petição] Conectar Gerador de Pré-Minutas (`gerarPreMinutaPeticao`) à LLM Real
+- **Status:** 📋? Conclu?do
+- **Prioridade:** P1 (Alta)
+- **Diagnóstico Atual:** Em `src/lib/ia-juridica.ts`, a função `gerarPreMinutaPeticao` ignora `GEMINI_API_KEY` e `OPENAI_API_KEY`, retornando apenas templates fixos escolhidos por `if/else`.
+- **Objetivo:** Gerar minutas realmente contextualizadas com base no inteiro teor extraído do PJe, texto da publicação e metadados do Datajud usando Gemini/OpenAI, mantendo o template fixo apenas como fallback.
+- **Critérios de Aceite:**
+  - [ ] Integrar chamada a `gemini-2.5-flash` e `gpt-4o-mini` em `gerarPreMinutaPeticao` quando as chaves estiverem configuradas.
+  - [ ] Incluir no prompt: órgão julgador, número CNJ, partes, tipo de ato, texto completo da publicação e texto extraído do PDF (se houver).
+  - [ ] Retornar no payload o modo utilizado (`LLM_GEMINI`, `LLM_OPENAI` ou `TEMPLATE_FALLBACK`) e exibir badge transparente na UI.
+
+### Issue #69: [IA / RAG Real] Evoluir `/api/ia/chat-base` para RAG com Síntese por LLM e Busca Semântica
+- **Status:** 📋? Conclu?do
+- **Prioridade:** P1 (Alta)
+- **Diagnóstico Atual:** `src/app/api/ia/chat-base/route.ts` faz apenas busca lexical simples (`includes`) nos últimos 150 registros e concatena trechos brutos sem usar LLM nem embeddings.
+- **Objetivo:** Permitir perguntas analíticas reais sobre processos, publicações e PDFs com resposta sintetizada por LLM e citações verificáveis.
+- **Critérios de Aceite:**
+  - [ ] Recuperar trechos relevantes com busca melhorada (full-text search / `pgvector` quando em PostgreSQL) sem limite fixo de 150 registros.
+  - [ ] Enviar os trechos recuperados como contexto para Gemini/OpenAI sintetizar uma resposta objetiva citando processo, tribunal e fonte.
+  - [ ] Manter fallback lexical claramente sinalizado quando não houver chave de IA configurada.
+
+### Issue #70: [OCR Real] Implementar OCR para PDFs Escaneados em `crawler-documentos.ts`
+- **Status:** 📋? Conclu?do
+- **Prioridade:** P1 (Alta)
+- **Diagnóstico Atual:** Quando `unpdf` falha ou retorna texto vazio em PDFs digitalizados (imagem), `src/lib/crawler-documentos.ts` apenas grava a mensagem estática `"[PDF binário obtido com sucesso, mas não foi possível extrair texto selecionável.]"`.
+- **Objetivo:** Extrair texto real de PDFs escaneados sem camada de texto selecionável.
+- **Critérios de Aceite:**
+  - [ ] Detectar automaticamente PDFs com texto vazio ou abaixo de um limiar mínimo de caracteres por página.
+  - [ ] Acionar fallback real de OCR via Gemini Multimodal (PDF nativo) ou pipeline OCR configurável.
+  - [ ] Registrar no `DocumentoOriginal` se o texto veio de `UNPDF` ou `OCR_IA`.
+
+### Issue #71: [Segurança / Auth & RBAC] Autenticação Real, Login no Painel e Proteção das Rotas `/api/*`
+- **Status:** 📋? Conclu?do
+- **Prioridade:** P0 (Crítica antes de expor na internet)
+- **Diagnóstico Atual:** O painel não possui login, as rotas `/api/*` não validam JWT/sessão (inclusive `POST /api/cron/radar`, `/api/config/*`, `/api/webhooks` e `/api/exportar/backup`), não existem tabelas `Usuario`/`Organizacao` no `schema.prisma`, e `auth-jwt.ts`/`webhooks.ts` usam segredos padrão hardcoded em fallback.
+- **Objetivo:** Blindar o acesso ao painel e às APIs com autenticação real e controle de permissões por perfil.
+- **Critérios de Aceite:**
+  - [ ] Adicionar models `Organizacao` e `Usuario` (com hash de senha seguro e perfis `ADMIN`, `SOCIO`, `CONTROLADORIA`, `ADVOGADO`, `ESTAGIARIO`) no `prisma/schema.prisma`.
+  - [ ] Criar fluxo de login/sessão (cookie HttpOnly ou Auth.js) e middleware protegendo painel e rotas `/api/*`.
+  - [ ] Proteger também `POST /api/cron/radar` e rejeitar inicialização em produção (`NODE_ENV=production`) se `JWT_SECRET`, `WEBHOOK_HMAC_SECRET` ou `CRON_SECRET` não estiverem definidos.
+
+### Issue #72: [Segurança / SSRF] Proteção Contra SSRF em Crawler de Documentos e Webhooks
+- **Status:** 📋? Conclu?do
+- **Prioridade:** P0 (Crítica antes de expor na internet)
+- **Diagnóstico Atual:** `POST /api/inspecionar-link`, `GET /api/documentos/baixar` e `POST /api/webhooks` aceitam qualquer URL começando com `http` e realizam `fetch` server-side sem validar host/IP.
+- **Objetivo:** Impedir requisições do servidor para redes internas (`localhost`, `127.0.0.1`, `169.254.169.254`, faixas RFC1918) ou domínios arbitrários.
+- **Critérios de Aceite:**
+  - [ ] Em `/api/inspecionar-link` e `/api/documentos/baixar`, restringir hosts permitidos a domínios oficiais de tribunais (`*.jus.br` / allowlist configurável) e apenas HTTPS.
+  - [ ] Em `/api/webhooks`, validar DNS/IP de destino bloqueando IPs privados, loopback e link-local, além de exigir HTTPS em produção.
+
+---
+
+## Fase 12: Persistência Completa, Automação Real & Engenharia
+
+### Issue #73: [Persistência Operacional] Salvar no Banco Estados que Hoje Ficam Apenas em Memória/Frontend
+- **Status:** 📋? Conclu?do
+- **Prioridade:** P1 (Alta)
+- **Diagnóstico Atual:** Vários recursos listados nas Issues #34, #38, #40, #42, #44 e #47 ainda não persistem no `schema.prisma`: homônimos ignorados ficam apenas em estado React; baixas de prazo e checklists de perícia não são salvos; `AdvogadoEscritorio` não tem `advogadoSubstituto`/`emFeriasAte`; cache do Datajud é apenas um `Map` em memória; quedas de tribunais não são gravadas em banco.
+- **Objetivo:** Garantir persistência real de todo o fluxo operacional da controladoria.
+- **Critérios de Aceite:**
+  - [ ] Adicionar campos de workflow em `Processo`/`Publicacao` (status de baixa do prazo, conferido por/em, ignorado como homônimo, checklist de perícia).
+  - [ ] Adicionar `emFeriasAte` e `advogadoSubstitutoId` em `AdvogadoEscritorio`.
+  - [ ] Criar tabela de cache persistente para consultas Datajud (`CacheDatajud`) e histórico de indisponibilidade (`LogSaudeTribunal`).
+  - [ ] Criar endpoints `PATCH /api/processos/[id]` e `PATCH /api/config/advogados/[id]` e conectá-los à UI.
+
+### Issue #74: [Automação 24/7 & Digest] Agendamento Real do Radar + Envio Automático do Digest Matinal 08h
+- **Status:** 📋? Conclu?do
+- **Prioridade:** P1 (Alta)
+- **Diagnóstico Atual:** `vercel.json` agenda apenas `/api/cron/radar` a cada 4h. Não há agendamento para `/api/digest` às 08h, não há disparo automático do digest por WhatsApp/e-mail e em ambiente local nada executa automaticamente.
+- **Objetivo:** Garantir execução recorrente confiável tanto em nuvem quanto localmente.
+- **Critérios de Aceite:**
+  - [ ] Adicionar rota/cron de disparo do Digest Matinal às 08h (BRT) no `vercel.json` (ou GitHub Actions / agendador externo).
+  - [ ] Documentar/fornecer script de agendamento local (Windows Task Scheduler / cron) para quem rodar no PC próprio.
+  - [ ] Evitar duplicidade de alertas de urgência alta já notificados em execuções anteriores do worker.
+
+### Issue #75: [Notificações Reais] Conectores Nativos de WhatsApp, E-mail e Slack + Log de Entregas
+- **Status:** 📋? Conclu?do
+- **Prioridade:** P1 (Alta)
+- **Diagnóstico Atual:** `src/lib/webhooks.ts` envia apenas um `POST` JSON genérico sem adaptar o payload para Slack/WhatsApp/E-mail e sem persistir histórico de sucesso/falha das entregas.
+- **Objetivo:** Permitir entrega imediata de alertas críticos e do Digest Matinal nos canais reais usados pelo escritório.
+- **Critérios de Aceite:**
+  - [ ] Criar tabela `LogEntregaWebhook` no Prisma registrando status HTTP, tentativas, erro e timestamp.
+  - [ ] Implementar adaptadores de payload por canal: `WEBHOOK` (genérico HMAC), `SLACK` (Incoming Webhook Blocks), `WHATSAPP` (Evolution API / WhatsApp Cloud API) e `EMAIL` (Resend / SMTP).
+  - [ ] Exibir histórico de entregas e botão de reenvio na aba de Configurações.
+
+### Issue #76: [Portal do Cliente & Correspondentes] Links Temporários Assinados (48h) e Visão Dedicada
+- **Status:** 📋? Conclu?do
+- **Prioridade:** P2 (Média)
+- **Diagnóstico Atual:** `/api/digest?cliente=...` retorna JSON aberto sem token por cliente, e não existe rota pública com token expirável de 48h para compartilhamento seguro de pasta com correspondentes (Issue #60).
+- **Objetivo:** Disponibilizar acesso seguro e restrito tanto para clientes quanto para correspondentes externos.
+- **Critérios de Aceite:**
+  - [ ] Criar tabela `LinkCompartilhamento` (ou JWT assinado com escopo de processo/cliente e expiração configurável de 48h).
+  - [ ] Criar página dedicada `/compartilhado/[token]` exibindo apenas o processo ou carteira autorizada, com opção de anonimização LGPD.
+
+### Issue #77: [Refatoração Frontend & PWA] Modularizar `src/app/page.tsx` + Atalhos de Teclado e Service Worker
+- **Status:** 📋? Conclu?do
+- **Prioridade:** P2 (Média)
+- **Diagnóstico Atual:** `src/app/page.tsx` concentra ~137 KB em um único arquivo monolítico; os atalhos de teclado (`J`/`K`/`E`/`C`) da Issue #49 não estão implementados via listener global; e o PWA (Issue #35) possui apenas `public/manifest.json` sem Service Worker.
+- **Objetivo:** Melhorar manutenibilidade, performance e experiência de triagem rápida no desktop e mobile.
+- **Critérios de Aceite:**
+  - [ ] Extrair abas e modais de `src/app/page.tsx` para componentes em `src/components/` (`BuscaRadar`, `ListaProcessos`, `CockpitKanban`, `BiJurimetria`, `PainelConfig`, `ModalPastaProcesso`).
+  - [ ] Implementar navegação por teclado (`J`/`K`, `E`, `C`) com foco visual na fila de triagem.
+  - [ ] Adicionar Service Worker (`public/sw.js`) e registro PWA com suporte a Web Push.
+
+### Issue #78: [Testes & CI] Suite de Testes Automatizados e Pipeline GitHub Actions
+- **Status:** 📋? Conclu?do
+- **Prioridade:** P1 (Alta)
+- **Diagnóstico Atual:** O repositório não possui testes automatizados (`package.json` não tem script `test`) nem workflow de CI no GitHub. Regras jurídicas críticas (cálculo de prazos forenses, recesso Art. 220 CPC, classificação de concorrência, extração de alertas) não têm validação automatizada contra regressões.
+- **Objetivo:** Garantir confiabilidade contínua nas regras jurídicas e rotas da API.
+- **Critérios de Aceite:**
+  - [ ] Configurar Vitest para testes unitários das bibliotecas `src/lib/auto-update.ts`, `src/lib/inteligencia.ts`, `src/lib/analytics-juridico.ts` e `src/lib/datajud.ts`.
+  - [ ] Cobrir cenários críticos de prazo fatal (feriados nacionais/forenses, recesso 20/12 a 20/01, prazo interno D-2, Res. CNJ 455).
+  - [ ] Adicionar workflow `.github/workflows/ci.yml` executando `tsc --noEmit`, `npm run lint`, `npm test` e `npm run build` em cada push/PR.
