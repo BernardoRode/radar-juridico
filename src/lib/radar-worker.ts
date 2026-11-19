@@ -8,34 +8,16 @@ import {
   salvarRadarNoBanco,
 } from '@/lib/persistencia';
 import { dispararWebhooksAlertaAlta } from '@/lib/webhooks';
+import { consultarDjenComRetryEPaginacao } from '@/lib/djen';
 import { ComunicacaoCNJ } from '@/types/juridico';
 
-const CNJ_API_URL = 'https://comunicaapi.pje.jus.br/api/v1/comunicacao';
-
 async function consultarCnj(params: URLSearchParams): Promise<ComunicacaoCNJ[]> {
-  const url = `${CNJ_API_URL}?${params.toString()}`;
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 15000);
-  try {
-    const res = await fetch(url, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) RadarJuridico/1.0',
-      },
-      signal: controller.signal,
-      cache: 'no-store',
-    });
-    if (!res.ok) return [];
-    const data = await res.json();
-    if (Array.isArray(data?.items)) return data.items;
-    if (Array.isArray(data)) return data;
-    return [];
-  } catch {
-    return [];
-  } finally {
-    clearTimeout(timer);
-  }
+  const res = await consultarDjenComRetryEPaginacao(params, {
+    maxPaginas: 2,
+    timeoutMs: 18000,
+    maxRetries: 2,
+  });
+  return res.items;
 }
 
 export interface ResultadoVarreduraRadar {

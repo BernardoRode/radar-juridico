@@ -42,6 +42,25 @@ const ESTADOS_TR: Record<string, string> = {
 };
 
 /**
+ * Issue #82: Detecta falhas silenciosas de shards no retorno do Elasticsearch do Datajud (`_shards.failed > 0`).
+ * Quando um shard do tribunal está sobrecarregado, o Datajud retorna HTTP 200 com `hits: []` e `_shards.failed > 0`.
+ */
+export function detectarFalhaParcialShardsDatajud(json: unknown): {
+  parcial: boolean;
+  falhos: number;
+  total: number;
+} {
+  const shards = (json as { _shards?: { failed?: number; total?: number } } | null)?._shards;
+  const falhos = typeof shards?.failed === 'number' ? shards.failed : 0;
+  const total = typeof shards?.total === 'number' ? shards.total : 0;
+  return {
+    parcial: falhos > 0,
+    falhos,
+    total,
+  };
+}
+
+/**
  * Resolve o índice da API Pública do Datajud (ex: `api_publica_trf4`, `api_publica_trt4`, `api_publica_tjrs`)
  * a partir da sigla do tribunal ou dos dígitos J.TR do número CNJ de 20 dígitos.
  */
@@ -118,35 +137,41 @@ function formatarDataAjuizamento(raw?: string): string | undefined {
 /**
  * Consulta a API Pública do Datajud (CNJ) para obter capa, classe, assuntos (TPU),
  * data de distribuição/ajuizamento e a árvore completa de movimentações do processo.
- * Usa cache em 2 níveis (Memória L1 + Banco Prisma L2 `CacheDatajud`) para proteção Anti-429.
+ * Usa cache em 2 níveis (Memória L1 + Banco Prisma L2 `CacheDatajud`) para proteção Anti-429,
+ * com blindagem contra falha silenciosa de shards (`_shards.failed > 0`, Issue #82).
  */
 export async function consultarDatajudProcesso(
   numeroProcesso: string,
-  siglaTribunal?: string
+  siglaTribunal?: string,
+  opcoes?: { ignorarCache?: boolean }
 ): Promise<DadosDatajud> {
   const numLimpo = numeroProcesso.replace(/[^0-9]/g, '');
 
-  // L1: Cache em memória
-  const emCache = cacheDatajudMemoria.get(numLimpo);
-  if (emCache && emCache.expiraEm > Date.now()) {
-    return { ...emCache.dados, origemCache: true };
-  }
-
-  // L2: Cache persistido no banco (Issue #34)
-  try {
-    const cacheDb = await prisma.cacheDatajud.findUnique({
-      where: { numeroProcesso: numLimpo },
-    });
-    if (cacheDb && cacheDb.expiraEm.getTime() > Date.now()) {
-      const dadosDb = JSON.parse(cacheDb.dadosJson) as DadosDatajud;
-      cacheDatajudMemoria.set(numLimpo, {
-        expiraEm: cacheDb.expiraEm.getTime(),
-        dados: dadosDb,
-      });
-      return { ...dadosDb, origemCache: true };
+  if (!opcoes?.ignorarCache) {
+    // L1: Cache em memória
+    const emCache = cacheDatajudMemoria.get(numLimpo);
+    if (emCache && emCache.expiraEm > Date.now()) {
+      return { ...emCache.dados, origemCache: true };
     }
-  } catch {
-    // Continua consulta ao vivo se tabela não disponível
+
+    // L2: Cache persistido no banco (Issue #34)
+    try {
+      const cacheDb = await prisma.cacheDatajud.findUnique({
+        where: { numeroProcesso: numLimpo },
+      });
+      if (cacheDb && cacheDb.expiraEm.getTime() > Date.now()) {
+        const dadosDb = JSON.parse(cacheDb.dadosJson) as DadosDatajud;
+        if (!dadosDb.respostaParcialShards) {
+          cacheDatajudMemoria.set(numLimpo, {
+            expiraEm: cacheDb.expiraEm.getTime(),
+            dados: dadosDb,
+          });
+          return { ...dadosDb, origemCache: true };
+        }
+      }
+    } catch {
+      // Continua consulta ao vivo se tabela não disponível
+    }
   }
 
   const indice = resolverIndiceDatajud(numLimpo, siglaTribunal);
@@ -166,152 +191,180 @@ export async function consultarDatajudProcesso(
 
   const url = `https://api-publica.datajud.cnj.jus.br/${indice}/_search`;
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 30000);
+  for (let tentativa = 0; tentativa < 2; tentativa++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 30000);
 
-  try {
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        Authorization: `APIKey ${DATAJUD_PUBLIC_API_KEY}`,
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      },
-      body: JSON.stringify({
-        query: {
-          match: {
-            numeroProcesso: numLimpo,
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          Authorization: `APIKey ${DATAJUD_PUBLIC_API_KEY}`,
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          query: {
+            match: {
+              numeroProcesso: numLimpo,
+            },
           },
-        },
-      }),
-      signal: controller.signal,
-      cache: 'no-store',
-    });
+        }),
+        signal: controller.signal,
+        cache: 'no-store',
+      });
 
-    if (!response.ok) {
-      return {
-        encontrado: false,
-        indiceConsultado: indice,
-        numeroProcesso: numLimpo,
-        assuntos: [],
-        totalMovimentos: 0,
-        movimentos: [],
-        mensagem: `A API Pública do Datajud retornou status ${response.status} para o índice ${indice}.`,
-      };
-    }
-
-    const json = await response.json();
-    const hits = json?.hits?.hits || [];
-
-    if (hits.length === 0) {
-      return {
-        encontrado: false,
-        indiceConsultado: indice,
-        numeroProcesso: numLimpo,
-        assuntos: [],
-        totalMovimentos: 0,
-        movimentos: [],
-        mensagem: `Processo não localizado na base pública do Datajud (${indice}). Processos em segredo de justiça ou recém-distribuídos podem ainda não constar no índice.`,
-      };
-    }
-
-    // Se houver mais de um grau (G1, G2), prioriza o de atualização mais recente
-    const ordenado = [...hits].sort((a, b) => {
-      const da = a?._source?.dataHoraUltimaAtualizacao || '';
-      const db = b?._source?.dataHoraUltimaAtualizacao || '';
-      return db.localeCompare(da);
-    });
-
-    const src = ordenado[0]._source;
-    const movimentosBrutos: MovimentoDatajud[] = Array.isArray(src.movimentos)
-      ? src.movimentos
-      : [];
-
-    const movimentosOrdenados = [...movimentosBrutos].sort((a, b) =>
-      (b.dataHora || '').localeCompare(a.dataHora || '')
-    );
-
-    // Issue #42: Detecta protocolo de petição nos últimos movimentos para baixa automática de prazo
-    const movProtocolo = movimentosOrdenados.slice(0, 5).find((m) => {
-      const n = (m.nome || '').toLowerCase();
-      return (
-        m.codigo === 85 ||
-        n.includes('petição') ||
-        n.includes('juntada de petição') ||
-        n.includes('contestação') ||
-        n.includes('recurso')
-      );
-    });
-    const protocoloRecenteDetectado = movProtocolo
-      ? `${movProtocolo.nome} em ${(movProtocolo.dataHora || '').slice(0, 10)}`
-      : undefined;
-
-    const resultadoFinal: DadosDatajud = {
-      encontrado: true,
-      indiceConsultado: indice,
-      numeroProcesso: src.numeroProcesso || numLimpo,
-      tribunal: src.tribunal,
-      grau: src.grau,
-      classe: src.classe,
-      assuntos: Array.isArray(src.assuntos) ? src.assuntos : [],
-      dataAjuizamento: formatarDataAjuizamento(src.dataAjuizamento),
-      dataHoraUltimaAtualizacao: src.dataHoraUltimaAtualizacao,
-      orgaoJulgador: src.orgaoJulgador,
-      sistema: src.sistema,
-      formato: src.formato,
-      nivelSigilo: src.nivelSigilo,
-      totalMovimentos: movimentosOrdenados.length,
-      movimentos: movimentosOrdenados,
-      protocoloRecenteDetectado,
-    };
-
-    const expiraEmMs = Date.now() + CACHE_TTL_MS;
-    cacheDatajudMemoria.set(numLimpo, {
-      expiraEm: expiraEmMs,
-      dados: resultadoFinal,
-    });
-
-    // Persiste cache L2 + enriquecimento do processo no banco
-    prisma.cacheDatajud
-      .upsert({
-        where: { numeroProcesso: numLimpo },
-        create: {
+      if (!response.ok) {
+        return {
+          encontrado: false,
+          indiceConsultado: indice,
           numeroProcesso: numLimpo,
-          indiceConsultado: indice,
-          dadosJson: JSON.stringify(resultadoFinal),
-          expiraEm: new Date(expiraEmMs),
-        },
-        update: {
-          indiceConsultado: indice,
-          dadosJson: JSON.stringify(resultadoFinal),
-          expiraEm: new Date(expiraEmMs),
-        },
-      })
-      .catch(() => {});
+          assuntos: [],
+          totalMovimentos: 0,
+          movimentos: [],
+          mensagem: `A API Pública do Datajud retornou status ${response.status} para o índice ${indice}.`,
+        };
+      }
 
-    prisma.processo
-      .update({
-        where: { numeroProcesso: numLimpo },
-        data: {
-          dataAjuizamento: resultadoFinal.dataAjuizamento || null,
-          assuntosJson: JSON.stringify(resultadoFinal.assuntos),
-        },
-      })
-      .catch(() => {});
+      const json = await response.json();
+      const infoShards = detectarFalhaParcialShardsDatajud(json);
+      const hits = json?.hits?.hits || [];
 
-    return resultadoFinal;
-  } catch (error: unknown) {
-    const msg = error instanceof Error ? error.message : 'Erro desconhecido';
-    return {
-      encontrado: false,
-      indiceConsultado: indice,
-      numeroProcesso: numLimpo,
-      assuntos: [],
-      totalMovimentos: 0,
-      movimentos: [],
-      mensagem: `Falha ao consultar o Datajud: ${msg}`,
-    };
-  } finally {
-    clearTimeout(timer);
+      // Issue #82: Se houve falha parcial de shards e veio vazio na 1ª tentativa, faz retry automático
+      if (infoShards.parcial && hits.length === 0 && tentativa === 0) {
+        await new Promise((r) => setTimeout(r, 600));
+        continue;
+      }
+
+      if (hits.length === 0) {
+        // Issue #82: Nunca grava falso negativo no CacheDatajud
+        return {
+          encontrado: false,
+          indiceConsultado: indice,
+          numeroProcesso: numLimpo,
+          assuntos: [],
+          totalMovimentos: 0,
+          movimentos: [],
+          respostaParcialShards: infoShards.parcial,
+          shardsFalhos: infoShards.falhos,
+          mensagem: infoShards.parcial
+            ? `O Datajud reportou falha parcial em ${infoShards.falhos}/${infoShards.total} shards do índice ${indice}. Resultado vazio não foi cacheado para evitar falso negativo.`
+            : `Processo não localizado na base pública do Datajud (${indice}). Processos em segredo de justiça ou recém-distribuídos podem ainda não constar no índice.`,
+        };
+      }
+
+      // Se houver mais de um grau (G1, G2), prioriza o de atualização mais recente
+      const ordenado = [...hits].sort((a, b) => {
+        const da = a?._source?.dataHoraUltimaAtualizacao || '';
+        const db = b?._source?.dataHoraUltimaAtualizacao || '';
+        return db.localeCompare(da);
+      });
+
+      const src = ordenado[0]._source;
+      const movimentosBrutos: MovimentoDatajud[] = Array.isArray(src.movimentos)
+        ? src.movimentos
+        : [];
+
+      const movimentosOrdenados = [...movimentosBrutos].sort((a, b) =>
+        (b.dataHora || '').localeCompare(a.dataHora || '')
+      );
+
+      // Issue #42: Detecta protocolo de petição nos últimos movimentos para baixa automática de prazo
+      const movProtocolo = movimentosOrdenados.slice(0, 5).find((m) => {
+        const n = (m.nome || '').toLowerCase();
+        return (
+          m.codigo === 85 ||
+          n.includes('petição') ||
+          n.includes('juntada de petição') ||
+          n.includes('contestação') ||
+          n.includes('recurso')
+        );
+      });
+      const protocoloRecenteDetectado = movProtocolo
+        ? `${movProtocolo.nome} em ${(movProtocolo.dataHora || '').slice(0, 10)}`
+        : undefined;
+
+      const resultadoFinal: DadosDatajud = {
+        encontrado: true,
+        indiceConsultado: indice,
+        numeroProcesso: src.numeroProcesso || numLimpo,
+        tribunal: src.tribunal,
+        grau: src.grau,
+        classe: src.classe,
+        assuntos: Array.isArray(src.assuntos) ? src.assuntos : [],
+        dataAjuizamento: formatarDataAjuizamento(src.dataAjuizamento),
+        dataHoraUltimaAtualizacao: src.dataHoraUltimaAtualizacao,
+        orgaoJulgador: src.orgaoJulgador,
+        sistema: src.sistema,
+        formato: src.formato,
+        nivelSigilo: src.nivelSigilo,
+        totalMovimentos: movimentosOrdenados.length,
+        movimentos: movimentosOrdenados,
+        protocoloRecenteDetectado,
+        respostaParcialShards: infoShards.parcial,
+        shardsFalhos: infoShards.falhos,
+      };
+
+      // Issue #82: Só grava no Cache L1/L2 se não houve falha parcial de shards
+      if (!infoShards.parcial) {
+        const expiraEmMs = Date.now() + CACHE_TTL_MS;
+        cacheDatajudMemoria.set(numLimpo, {
+          expiraEm: expiraEmMs,
+          dados: resultadoFinal,
+        });
+
+        prisma.cacheDatajud
+          .upsert({
+            where: { numeroProcesso: numLimpo },
+            create: {
+              numeroProcesso: numLimpo,
+              indiceConsultado: indice,
+              dadosJson: JSON.stringify(resultadoFinal),
+              expiraEm: new Date(expiraEmMs),
+            },
+            update: {
+              indiceConsultado: indice,
+              dadosJson: JSON.stringify(resultadoFinal),
+              expiraEm: new Date(expiraEmMs),
+            },
+          })
+          .catch(() => {});
+      }
+
+      prisma.processo
+        .update({
+          where: { numeroProcesso: numLimpo },
+          data: {
+            dataAjuizamento: resultadoFinal.dataAjuizamento || null,
+            assuntosJson: JSON.stringify(resultadoFinal.assuntos),
+          },
+        })
+        .catch(() => {});
+
+      return resultadoFinal;
+    } catch (error: unknown) {
+      const msg = error instanceof Error ? error.message : 'Erro desconhecido';
+      return {
+        encontrado: false,
+        indiceConsultado: indice,
+        numeroProcesso: numLimpo,
+        assuntos: [],
+        totalMovimentos: 0,
+        movimentos: [],
+        mensagem: `Falha ao consultar o Datajud: ${msg}`,
+      };
+    } finally {
+      clearTimeout(timer);
+    }
   }
+
+  return {
+    encontrado: false,
+    indiceConsultado: indice,
+    numeroProcesso: numLimpo,
+    assuntos: [],
+    totalMovimentos: 0,
+    movimentos: [],
+    mensagem: 'Falha após retentativa no Datajud.',
+  };
 }

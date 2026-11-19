@@ -138,16 +138,18 @@ model WebhookAlerta {
 }
 
 model LogEntregaWebhook {
-  id         String   @id @default(cuid())
-  webhookId  String?
-  canal      String
-  urlDestino String
-  evento     String
-  sucesso    Boolean
-  httpStatus Int?
-  tentativas Int      @default(1)
-  erro       String?
-  criadoEm   DateTime @default(now())
+  id          String   @id @default(cuid())
+  webhookId   String?
+  eventId     String?  // Issue #83: Idempotência X-Radar-Event-Id
+  canal       String
+  urlDestino  String
+  evento      String
+  payloadJson String?  // Issue #83: Payload salvo para Replay de falhas
+  sucesso     Boolean
+  httpStatus  Int?
+  tentativas  Int      @default(1)
+  erro        String?
+  criadoEm    DateTime @default(now())
 }
 
 model CacheDatajud {
@@ -233,7 +235,7 @@ model PerfilColetivoVara {
   totalLiminares    Int      @default(0)
   sumulasTemasJson  String?  // JSON array de súmulas/temas recorrentes nesta vara
   ultimaAtualizacao DateTime @updatedAt
-  criadoEm          DateTime @default(now())
+  criadoEm          DateTime @updatedAt
 }
 
 model ModeloMinutaValidada {
@@ -262,6 +264,45 @@ model ApiKeyCliente {
   ativa         Boolean   @default(true)
   ultimoUsoEm   DateTime?
   criadoEm      DateTime  @default(now())
+
+  @@index([organizacaoId])
+}
+
+model JobLoteConsulta {
+  id             String    @id @default(cuid())
+  organizacaoId  String?   // Issue #87: Processamento em Lote / Batch B2B
+  tipo           String    @default("PROCESSOS") // PROCESSOS | CNPJS
+  status         String    @default("EM_ANDAMENTO") // EM_ANDAMENTO | CONCLUIDO | ERRO
+  totalItens     Int       @default(0)
+  processados    Int       @default(0)
+  sucessos       Int       @default(0)
+  falhas         Int       @default(0)
+  callbackUrl    String?
+  entradasJson   String
+  resultadosJson String?
+  iniciadoEm     DateTime  @default(now())
+  finalizadoEm   DateTime?
+
+  @@index([organizacaoId])
+}
+
+model RegraAutomacao {
+  id               String    @id @default(cuid())
+  organizacaoId    String?   // Issue #90: Motor de Regras No-Code por Cliente
+  nome             String
+  ativa            Boolean   @default(true)
+  condTribunal     String?   // Ex: "TRT4"
+  condValorMinRS   Float?    // Ex: 50000
+  condTipoAto      String?   // Ex: "SENTENCA"
+  condUrgencia     String?   // Ex: "ALTA"
+  condConcorrencia String?   // Ex: "SEM_ADVOGADO_CADASTRADO"
+  acaoWebhookUrl   String?
+  acaoGerarMinuta  Boolean   @default(false)
+  acaoPrioridade   String    @default("CRITICA")
+  totalDisparos    Int       @default(0)
+  ultimoDisparoEm  DateTime?
+  criadoEm         DateTime  @default(now())
+  atualizadoEm     DateTime  @updatedAt
 
   @@index([organizacaoId])
 }

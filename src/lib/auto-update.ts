@@ -560,3 +560,72 @@ export function calcularViabilidadeAcordo(
     economiaEstimada: 'Monitoramento preventivo ativo',
   };
 }
+
+
+/**
+ * Issue #85 (Res. CNJ 569/2024): Calcula o início da contagem de prazo após confirmação
+ * de citação eletrônica no Domicílio Judicial Eletrônico (DJE).
+ * Pela Res. CNJ 569/2024, o prazo somente começa a correr no 5º dia útil seguinte à confirmação.
+ */
+export function calcularInicioPrazoCitacaoDjeRes569(
+  dataConfirmacaoDje?: string,
+  prazoDiasUteis = 15,
+  siglaTribunal?: string
+):
+  | {
+      dataConfirmacaoFormatada: string;
+      dataInicioContagem: string;
+      dataFatalFormatada: string;
+      regraAplicada: string;
+    }
+  | undefined {
+  const dtConf = parseDataBrOuIso(dataConfirmacaoDje);
+  if (!dtConf) return undefined;
+
+  const dtInicio = avancarDiasUteisForenses(dtConf, 5, siglaTribunal);
+  const dtFatal = avancarDiasUteisForenses(
+    dtInicio,
+    Math.max(1, prazoDiasUteis),
+    siglaTribunal
+  );
+
+  return {
+    dataConfirmacaoFormatada: formatarDataBr(dtConf),
+    dataInicioContagem: formatarDataBr(dtInicio),
+    dataFatalFormatada: formatarDataBr(dtFatal),
+    regraAplicada:
+      'Res. CNJ 569/2024: início da contagem do prazo no 5º dia útil seguinte à confirmação da citação no DJE.',
+  };
+}
+
+/**
+ * Issue #85: Audita o atraso de remessa entre a data de assinatura ICP-Brasil do magistrado no PJe
+ * (`dataHoraAssinatura`) e a data de disponibilização efetiva no DJEN (`dataDisponibilizacao`).
+ * Fundamenta arguição de tempestividade pela data oficial do DJEN (Art. 224 CPC / Res. CNJ 455 e 569).
+ */
+export function auditarAtrasoRemessaDjen(
+  dataHoraAssinatura?: string,
+  dataDisponibilizacao?: string
+): { diasAtrasoRemessa: number; alertaAtraso?: string } | undefined {
+  const dtAssinatura = parseDataBrOuIso(dataHoraAssinatura);
+  const dtDisp = parseDataBrOuIso(dataDisponibilizacao);
+  if (!dtAssinatura || !dtDisp) return undefined;
+
+  const diffDias = Math.round(
+    (dtDisp.getTime() - dtAssinatura.getTime()) / (1000 * 60 * 60 * 24)
+  );
+  const diasAtrasoRemessa = Math.max(0, diffDias);
+
+  return {
+    diasAtrasoRemessa,
+    ...(diasAtrasoRemessa >= 2
+      ? {
+          alertaAtraso: `Atraso de ${diasAtrasoRemessa} dia(s) entre a assinatura no PJe (${formatarDataBr(
+            dtAssinatura
+          )}) e a disponibilização no DJEN (${formatarDataBr(
+            dtDisp
+          )}). Pela Res. CNJ 455/569 e Art. 224 CPC, prevalece a data do DJEN para contagem de tempestividade.`,
+        }
+      : {}),
+  };
+}

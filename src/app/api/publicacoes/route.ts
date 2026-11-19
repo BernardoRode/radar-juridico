@@ -8,11 +8,12 @@ import {
   salvarRadarNoBanco,
 } from '@/lib/persistencia';
 import { gerarRelatorioBIJuridico } from '@/lib/analytics-juridico';
-import { ComunicacaoCNJ } from '@/types/juridico';
 import { verificarAcessoApi } from '@/lib/auth-jwt';
 import { verificarRateLimit } from '@/lib/rate-limit';
-
-const CNJ_API_URL = 'https://comunicaapi.pje.jus.br/api/v1/comunicacao';
+import {
+  consultarDjenComRetryEPaginacao,
+  normalizarItensPorPaginaDjen,
+} from '@/lib/djen';
 
 export async function GET(request: NextRequest) {
   try {
@@ -33,10 +34,15 @@ export async function GET(request: NextRequest) {
     const dataInicio = searchParams.get('dataInicio')?.trim();
     const dataFim = searchParams.get('dataFim')?.trim();
     const pagina = searchParams.get('pagina') || '1';
-    const itensPorPagina = searchParams.get('itensPorPagina') || '25';
+    const itensPorPagina = String(
+      normalizarItensPorPaginaDjen(searchParams.get('itensPorPagina'))
+    );
+    const paginarAuto = searchParams.get('paginarAutomaticamente') !== 'false';
+    const maxPaginas = paginarAuto
+      ? Math.min(5, Math.max(1, Number(searchParams.get('maxPaginas') || '2') || 2))
+      : 1;
 
-    // Lista de OABs do nosso escritório (separadas por vírgula) para o motor de inteligência
-    // detectar automaticamente se um processo da "LG" está conosco ou com um escritório concorrente!
+    // Lista de OABs do nosso escritório (separadas por vírgula)
     const nossasOabsParam = searchParams.get('nossasOabs') || '';
     const oabsBanco = await obterOabsEscritorio();
     const nossasOabs = Array.from(
@@ -67,36 +73,24 @@ export async function GET(request: NextRequest) {
     cnjParams.set('pagina', pagina);
     cnjParams.set('itensPorPagina', itensPorPagina);
 
-    const targetUrl = `${CNJ_API_URL}?${cnjParams.toString()}`;
-
-    const response = await fetch(targetUrl, {
-      method: 'GET',
-      headers: {
-        Accept: 'application/json',
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) RadarJuridico/1.0',
-      },
-      cache: 'no-store',
+    // Issue #81: Consulta blindada com itensPorPagina <= 50, retry exponencial e paginação automática
+    const djenRes = await consultarDjenComRetryEPaginacao(cnjParams, {
+      maxPaginas,
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
+    if (!djenRes.ok) {
       return NextResponse.json(
         {
           sucesso: false,
-          erro: `A API do CNJ retornou status ${response.status}`,
-          detalhes: errorText,
-          endpointConsultado: targetUrl,
+          erro: `A API do CNJ retornou status ${djenRes.statusHttp}`,
+          detalhes: djenRes.erro,
+          endpointConsultado: djenRes.endpointConsultado,
         },
-        { status: response.status }
+        { status: djenRes.statusHttp || 502 }
       );
     }
 
-    const data = await response.json();
-    const items: ComunicacaoCNJ[] = Array.isArray(data?.items)
-      ? data.items
-      : Array.isArray(data)
-      ? data
-      : [];
+    const items = djenRes.items;
 
     // Passa todas as publicações pelo Motor de Inteligência & Enriquecimento
     const publicacoesEnriquecidas = items.map((item) =>
@@ -115,7 +109,9 @@ export async function GET(request: NextRequest) {
     // Resumo executivo de inteligência
     const resumo = {
       totalPublicacoesRetornadas: publicacoesEnriquecidas.length,
-      totalNoCnj: data?.count ?? publicacoesEnriquecidas.length,
+      totalNoCnj: djenRes.totalNoCnj,
+      paginasConsultadas: djenRes.paginasConsultadas,
+      itensPorPaginaAplicado: djenRes.itensPorPaginaAplicado,
       totalProcessosUnicos: processosConsolidados.length,
       processosNossoEscritorio: processosConsolidados.filter(
         (p) => p.statusConcorrencia === 'NOSSO_ESCRITORIO'
@@ -135,7 +131,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       sucesso: true,
-      endpointConsultado: targetUrl,
+      endpointConsultado: djenRes.endpointConsultado,
       oabsConsideradas: nossasOabs,
       persistencia,
       resumo,

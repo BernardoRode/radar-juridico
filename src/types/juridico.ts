@@ -60,6 +60,8 @@ export interface AnaliseInteligencia {
     prazoFatal?: string;
     prazoInternoD2?: string;
     limiteConfirmacaoDomicilio3Dias?: string;
+    inicioPrazoPosConfirmacaoDje5DiasRes569?: string;
+    diasAtrasoRemessaDjen?: number;
     audienciaDetectada?: string;
     linkAudienciaVirtual?: string;
     valorDetectado?: string;
@@ -135,6 +137,10 @@ export interface ResultadoExtracaoDocumento {
   temPdfDisponivel: boolean;
   textoExtraido?: string;
   alertasDoDocumento?: AnaliseInteligencia['alertasAutomaticos'];
+  auditoriaTempestividadeRes569?: {
+    diasAtrasoRemessa: number;
+    alertaAtraso?: string;
+  };
   mensagem: string;
 }
 
@@ -172,5 +178,7 @@ export interface DadosDatajud {
   movimentos: MovimentoDatajud[];
   protocoloRecenteDetectado?: string;
   origemCache?: boolean;
+  respostaParcialShards?: boolean; // Issue #82: Detecta _shards.failed > 0 no Elasticsearch do Datajud
+  shardsFalhos?: number;
   mensagem?: string;
 }
