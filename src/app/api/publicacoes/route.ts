@@ -9,11 +9,17 @@ import {
 } from '@/lib/persistencia';
 import { gerarRelatorioBIJuridico } from '@/lib/analytics-juridico';
 import { ComunicacaoCNJ } from '@/types/juridico';
+import { verificarAcessoApi } from '@/lib/auth-jwt';
+import { verificarRateLimit } from '@/lib/rate-limit';
 
 const CNJ_API_URL = 'https://comunicaapi.pje.jus.br/api/v1/comunicacao';
 
 export async function GET(request: NextRequest) {
   try {
+    const acesso = verificarAcessoApi(request);
+    if (!acesso.autorizado && acesso.respostaErro) return acesso.respostaErro;
+    const rl = verificarRateLimit(request, 'publicacoes', 60);
+    if (!rl.permitido && rl.resposta429) return rl.resposta429;
     const { searchParams } = new URL(request.url);
 
     // Parâmetros de busca multi-critério

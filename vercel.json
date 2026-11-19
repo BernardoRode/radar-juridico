@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/radar",
       "schedule": "0 */4 * * *"
+    },
+    {
+      "path": "/api/digest?disparar=true",
+      "schedule": "0 11 * * 1-5"
     }
   ]
 }

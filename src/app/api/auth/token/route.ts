@@ -1,15 +1,26 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { assinarJwt, extrairUsuarioJwt } from '@/lib/auth-jwt';
+import { assinarJwt, extrairUsuarioJwt, PerfilRbac } from '@/lib/auth-jwt';
+
+const PERFIS_VALIDOS: PerfilRbac[] = [
+  'ADMIN',
+  'SOCIO',
+  'CONTROLADORIA',
+  'ADVOGADO',
+  'ESTAGIARIO',
+  'MOBILE_APP',
+  'INTEGRACAO',
+];
 
 /**
  * POST /api/auth/token
- * Emite um token JWT HS256 para consumo pelo App Mobile ou integrações externas.
+ * Issue #9 + #30 + #31: Emite um token JWT HS256 com perfil RBAC para App Mobile,
+ * equipes multi-perfil e integrações B2B.
  * Se API_ACCESS_KEY estiver definida no .env, exige o campo `accessKey` correspondente.
  */
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json().catch(() => ({}));
-    const accessKeyEnv = process.env.API_ACCESS_KEY;
+    const accessKeyEnv = process.env.API_ACCESS_KEY?.trim();
 
     if (accessKeyEnv && body?.accessKey !== accessKeyEnv) {
       return NextResponse.json(
@@ -20,17 +31,22 @@ export async function POST(request: NextRequest) {
 
     const email = String(body?.email || 'advogado@escritorio.com.br').trim();
     const nome = String(body?.nome || 'Advogado Radar Jurídico').trim();
-    const perfil =
-      body?.perfil === 'MOBILE_APP' || body?.perfil === 'INTEGRACAO'
-        ? body.perfil
-        : 'ADVOGADO';
+    const organizacao = body?.organizacao
+      ? String(body.organizacao).trim()
+      : 'Escritório Principal';
+    const perfilRaw = String(body?.perfil || 'ADVOGADO').toUpperCase() as PerfilRbac;
+    const perfil: PerfilRbac = PERFIS_VALIDOS.includes(perfilRaw)
+      ? perfilRaw
+      : 'ADVOGADO';
 
-    const token = assinarJwt({ sub: email, nome, perfil });
+    const token = assinarJwt({ sub: email, nome, perfil, organizacao });
 
     return NextResponse.json({
       sucesso: true,
       tokenType: 'Bearer',
       accessToken: token,
+      perfil,
+      organizacao,
       expiraEmSegundos: 60 * 60 * 24 * 7,
     });
   } catch (error: unknown) {

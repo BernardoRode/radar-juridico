@@ -1,13 +1,23 @@
 import crypto from 'crypto';
-import { NextRequest } from 'next/server';
+import { NextRequest, NextResponse } from 'next/server';
 
 const JWT_SECRET =
   process.env.JWT_SECRET || 'radar-juridico-dev-secret-alterar-em-producao';
 
+export type PerfilRbac =
+  | 'ADMIN'
+  | 'SOCIO'
+  | 'CONTROLADORIA'
+  | 'ADVOGADO'
+  | 'ESTAGIARIO'
+  | 'MOBILE_APP'
+  | 'INTEGRACAO';
+
 export interface JwtPayload {
   sub: string;
   nome: string;
-  perfil: 'ADVOGADO' | 'MOBILE_APP' | 'INTEGRACAO';
+  perfil: PerfilRbac;
+  organizacao?: string;
   iat: number;
   exp: number;
 }
@@ -82,4 +92,66 @@ export function extrairUsuarioJwt(request: NextRequest): JwtPayload | null {
   const auth = request.headers.get('authorization');
   if (!auth || !auth.startsWith('Bearer ')) return null;
   return verificarJwt(auth.slice(7).trim());
+}
+
+/**
+ * Issue #30 + #31: Valida acesso RBAC e API Key quando `ENFORCE_AUTH=true`.
+ * Em desenvolvimento local (`ENFORCE_AUTH !== 'true'`), permite uso direto sem atrito.
+ */
+export function verificarAcessoApi(
+  request: NextRequest,
+  perfisPermitidos?: PerfilRbac[]
+): { autorizado: boolean; usuario?: JwtPayload; respostaErro?: NextResponse } {
+  const usuario = extrairUsuarioJwt(request);
+  const apiKeyHeader = request.headers.get('x-api-key')?.trim();
+  const apiAccessKeyEnv = process.env.API_ACCESS_KEY?.trim();
+
+  if (apiAccessKeyEnv && apiKeyHeader && apiKeyHeader === apiAccessKeyEnv) {
+    return {
+      autorizado: true,
+      usuario: {
+        sub: 'api-key@integracao',
+        nome: 'Integração B2B (API Key)',
+        perfil: 'INTEGRACAO',
+        iat: Math.floor(Date.now() / 1000),
+        exp: Math.floor(Date.now() / 1000) + 3600,
+      },
+    };
+  }
+
+  if (usuario) {
+    if (
+      perfisPermitidos &&
+      perfisPermitidos.length > 0 &&
+      usuario.perfil !== 'ADMIN' &&
+      !perfisPermitidos.includes(usuario.perfil)
+    ) {
+      return {
+        autorizado: false,
+        respostaErro: NextResponse.json(
+          {
+            sucesso: false,
+            erro: `Perfil "${usuario.perfil}" sem permissão RBAC para esta operação.`,
+          },
+          { status: 403 }
+        ),
+      };
+    }
+    return { autorizado: true, usuario };
+  }
+
+  if (process.env.ENFORCE_AUTH === 'true') {
+    return {
+      autorizado: false,
+      respostaErro: NextResponse.json(
+        {
+          sucesso: false,
+          erro: 'Autenticação obrigatória (envie Authorization: Bearer <JWT> ou X-API-Key).',
+        },
+        { status: 401 }
+      ),
+    };
+  }
+
+  return { autorizado: true };
 }

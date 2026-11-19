@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { executarVarreduraRadar } from '@/lib/radar-worker';
+import { verificarAcessoApi } from '@/lib/auth-jwt';
 
 /**
  * GET /api/cron/radar
@@ -20,7 +21,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ sucesso: true, execucoes });
     }
 
-    const cronSecret = process.env.CRON_SECRET;
+    const cronSecret = process.env.CRON_SECRET?.trim();
     if (cronSecret) {
       const auth = request.headers.get('authorization');
       if (auth !== `Bearer ${cronSecret}`) {
@@ -47,6 +48,11 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
+    const acesso = verificarAcessoApi(request, ['ADMIN', 'SOCIO', 'CONTROLADORIA', 'ADVOGADO']);
+    if (!acesso.autorizado && acesso.respostaErro) {
+      return acesso.respostaErro;
+    }
+
     const body = await request.json().catch(() => ({}));
     const dias = Number(body?.diasRetroativos || 3);
     const resultado = await executarVarreduraRadar('MANUAL', isNaN(dias) ? 3 : dias);
