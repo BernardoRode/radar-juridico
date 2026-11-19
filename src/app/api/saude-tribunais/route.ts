@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { prisma } from '@/lib/prisma';
 
 interface StatusServicoTribunal {
   servico: string;
@@ -60,7 +61,8 @@ async function testarEndpoint(
 /**
  * GET /api/saude-tribunais
  * Issue #40 + Issue #50: Monitora em tempo real a disponibilidade e latência dos barramentos
- * do CNJ (DJEN, PJe Validação e Datajud) e fornece o link direto da certidão de indisponibilidade.
+ * do CNJ (DJEN, PJe Validação e eproc), persiste histórico de quedas em `LogSaudeTribunal`
+ * e fornece o link direto da certidão de indisponibilidade.
  */
 export async function GET() {
   const servicos = await Promise.all([
@@ -84,9 +86,35 @@ export async function GET() {
     ),
   ]);
 
+  // Persiste os resultados de saúde/indisponibilidade no banco para prova de tempestividade
+  await Promise.all(
+    servicos.map((s) =>
+      prisma.logSaudeTribunal
+        .create({
+          data: {
+            servico: s.servico,
+            sistema: s.sistema,
+            status: s.status,
+            httpStatus: s.httpStatus,
+            latenciaMs: s.latenciaMs,
+          },
+        })
+        .catch(() => {})
+    )
+  );
+
+  const historicoQuedas = await prisma.logSaudeTribunal
+    .findMany({
+      where: { status: { in: ['INSTAVEL', 'INDISPONIVEL'] } },
+      orderBy: { verificadoEm: 'desc' },
+      take: 20,
+    })
+    .catch(() => []);
+
   return NextResponse.json({
     sucesso: true,
     verificadoEm: new Date().toISOString(),
     servicos,
+    historicoQuedas,
   });
 }

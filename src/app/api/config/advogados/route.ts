@@ -19,6 +19,10 @@ export async function POST(request: NextRequest) {
     const nome = String(body.nome || '').trim();
     const numeroOab = String(body.numeroOab || '').replace(/[^0-9]/g, '');
     const ufOab = String(body.ufOab || '').trim().toUpperCase().slice(0, 2);
+    const emFeriasAte = body.emFeriasAte ? String(body.emFeriasAte).trim() : null;
+    const advogadoSubstituto = body.advogadoSubstituto
+      ? String(body.advogadoSubstituto).trim()
+      : null;
 
     if (!nome || !numeroOab || ufOab.length !== 2) {
       return NextResponse.json(
@@ -29,12 +33,46 @@ export async function POST(request: NextRequest) {
 
     const advogado = await prisma.advogadoEscritorio.upsert({
       where: { numeroOab_ufOab: { numeroOab, ufOab } },
-      create: { nome, numeroOab, ufOab },
-      update: { nome, ativo: true },
+      create: { nome, numeroOab, ufOab, emFeriasAte, advogadoSubstituto },
+      update: { nome, ativo: true, emFeriasAte, advogadoSubstituto },
     });
     return NextResponse.json({ sucesso: true, advogado }, { status: 201 });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Erro ao salvar advogado';
+    return NextResponse.json({ sucesso: false, erro: msg }, { status: 500 });
+  }
+}
+
+/**
+ * PATCH /api/config/advogados
+ * Issue #47: Atualiza férias (`emFeriasAte`), substituto (`advogadoSubstituto`) ou status `ativo`.
+ */
+export async function PATCH(request: NextRequest) {
+  try {
+    const body = await request.json();
+    const id = String(body?.id || '').trim();
+    if (!id) {
+      return NextResponse.json({ sucesso: false, erro: 'Informe id do advogado.' }, { status: 400 });
+    }
+
+    const data: Record<string, unknown> = {};
+    if (typeof body.ativo === 'boolean') data.ativo = body.ativo;
+    if (body.emFeriasAte !== undefined) {
+      data.emFeriasAte = body.emFeriasAte ? String(body.emFeriasAte).trim() : null;
+    }
+    if (body.advogadoSubstituto !== undefined) {
+      data.advogadoSubstituto = body.advogadoSubstituto
+        ? String(body.advogadoSubstituto).trim()
+        : null;
+    }
+
+    const advogado = await prisma.advogadoEscritorio.update({
+      where: { id },
+      data,
+    });
+    return NextResponse.json({ sucesso: true, advogado });
+  } catch (error: unknown) {
+    const msg = error instanceof Error ? error.message : 'Erro ao atualizar advogado';
     return NextResponse.json({ sucesso: false, erro: msg }, { status: 500 });
   }
 }

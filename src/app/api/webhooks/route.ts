@@ -3,12 +3,28 @@ import { prisma } from '@/lib/prisma';
 import { dispararWebhooksAlertaAlta } from '@/lib/webhooks';
 import { validarUrlWebhookSegura } from '@/lib/seguranca';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const webhooks = await prisma.webhookAlerta.findMany({
-      orderBy: { criadoEm: 'desc' },
+    const { searchParams } = new URL(request.url);
+    const incluirLogs = searchParams.get('logs') === 'true';
+
+    const [webhooks, logs] = await Promise.all([
+      prisma.webhookAlerta.findMany({
+        orderBy: { criadoEm: 'desc' },
+      }),
+      incluirLogs
+        ? prisma.logEntregaWebhook.findMany({
+            orderBy: { criadoEm: 'desc' },
+            take: 30,
+          })
+        : Promise.resolve([]),
+    ]);
+
+    return NextResponse.json({
+      sucesso: true,
+      webhooks,
+      ...(incluirLogs ? { logs } : {}),
     });
-    return NextResponse.json({ sucesso: true, webhooks });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Erro ao listar webhooks';
     return NextResponse.json({ sucesso: false, erro: msg }, { status: 500 });

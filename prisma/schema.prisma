@@ -18,60 +18,68 @@ model ClienteMonitorado {
 }
 
 model AdvogadoEscritorio {
-  id           String   @id @default(cuid())
-  nome         String
-  numeroOab    String
-  ufOab        String
-  ativo        Boolean  @default(true)
-  criadoEm     DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
+  id                 String   @id @default(cuid())
+  nome               String
+  numeroOab          String
+  ufOab              String
+  ativo              Boolean  @default(true)
+  emFeriasAte        String?  // Issue #47: Data ISO/BR limite de férias
+  advogadoSubstituto String?  // Issue #47: Nome/OAB do substituto durante férias
+  criadoEm           DateTime @default(now())
+  atualizadoEm       DateTime @updatedAt
 
   @@unique([numeroOab, ufOab])
 }
 
 model Processo {
-  id                    String   @id @default(cuid())
-  numeroProcesso        String   @unique // 20 dígitos sem máscara
+  id                    String    @id @default(cuid())
+  numeroProcesso        String    @unique // 20 dígitos sem máscara
   numeroFormatado       String
   siglaTribunal         String
   orgaoJulgador         String
   classeProcessual      String
-  statusConcorrencia    String   // NOSSO_ESCRITORIO | ESCRITORIO_CONCORRENTE | SEM_ADVOGADO_CADASTRADO
+  statusConcorrencia    String    // NOSSO_ESCRITORIO | ESCRITORIO_CONCORRENTE | SEM_ADVOGADO_CADASTRADO
   ultimoStatusDetectado String
-  faseProcessual        String   @default("ANDAMENTO")
+  faseProcessual        String    @default("ANDAMENTO")
   prazoFatal            String?
-  urgenciaMaxima        String   // ALTA | MEDIA | NORMAL
+  urgenciaMaxima        String    // ALTA | MEDIA | NORMAL
   ultimaAtualizacao     String
-  partesJson            String?  // JSON serializado das partes
-  advogadosJson         String?  // JSON serializado dos advogados identificados
-  dataAjuizamento       String?  // Enriquecido via Datajud
-  assuntosJson          String?  // Enriquecido via Datajud
-  criadoEm              DateTime @default(now())
-  atualizadoEm          DateTime @updatedAt
+  partesJson            String?   // JSON serializado das partes
+  advogadosJson         String?   // JSON serializado dos advogados identificados
+  dataAjuizamento       String?   // Enriquecido via Datajud
+  assuntosJson          String?   // Enriquecido via Datajud
+  ignoradoHomonimo      Boolean   @default(false) // Issue #44: Desambiguação persistida
+  prazoBaixado          Boolean   @default(false) // Issue #42: Baixa de prazo persistida
+  prazoBaixadoEm        DateTime?
+  minutaPronta          Boolean   @default(false) // Issue #38: Controle D-2 Controladoria
+  checklistPericiaJson  String?   // Issue #64: Estado do checklist de perícia
+  ultimoAlertaEnviadoEm DateTime? // Evita duplicidade de webhooks no worker
+  criadoEm              DateTime  @default(now())
+  atualizadoEm          DateTime  @updatedAt
 
   publicacoes Publicacao[]
   documentos  DocumentoOriginal[]
 }
 
 model Publicacao {
-  id                 String   @id @default(cuid())
-  cnjId              Int      @unique
-  processoId         String
-  processo           Processo @relation(fields: [processoId], references: [id], onDelete: Cascade)
+  id                   String   @id @default(cuid())
+  cnjId                Int      @unique
+  processoId           String
+  processo             Processo @relation(fields: [processoId], references: [id], onDelete: Cascade)
   dataDisponibilizacao String
-  tipoComunicacao    String
-  nomeOrgao          String
-  texto              String
-  linkOriginal       String?
-  tipoAtoDetectado   String
-  faseProcessual     String   @default("ANDAMENTO")
-  prazoDetectado     String?
-  prazoFatal         String?
-  audienciaDetectada String?
-  valorDetectado     String?
-  urgencia           String
-  statusConcorrencia String
-  criadoEm           DateTime @default(now())
+  tipoComunicacao      String
+  nomeOrgao            String
+  texto                String
+  linkOriginal         String?
+  tipoAtoDetectado     String
+  faseProcessual       String   @default("ANDAMENTO")
+  prazoDetectado       String?
+  prazoFatal           String?
+  audienciaDetectada   String?
+  valorDetectado       String?
+  urgencia             String
+  statusConcorrencia   String
+  criadoEm             DateTime @default(now())
 }
 
 model DocumentoOriginal {
@@ -93,24 +101,66 @@ model DocumentoOriginal {
 }
 
 model ExecucaoRadar {
-  id                    String    @id @default(cuid())
-  origem                String    @default("MANUAL") // MANUAL | CRON
-  clientesVarredura     Int       @default(0)
-  oabsVarredura         Int       @default(0)
-  publicacoesEncontradas Int      @default(0)
-  processosSalvos       Int       @default(0)
-  alertasAlta           Int       @default(0)
-  status                String    @default("SUCESSO") // SUCESSO | PARCIAL | ERRO
-  detalhesJson          String?
-  iniciadoEm            DateTime  @default(now())
-  finalizadoEm          DateTime?
+  id                     String    @id @default(cuid())
+  origem                 String    @default("MANUAL") // MANUAL | CRON
+  clientesVarredura      Int       @default(0)
+  oabsVarredura          Int       @default(0)
+  publicacoesEncontradas Int       @default(0)
+  processosSalvos        Int       @default(0)
+  alertasAlta            Int       @default(0)
+  status                 String    @default("SUCESSO") // SUCESSO | PARCIAL | ERRO
+  detalhesJson           String?
+  iniciadoEm             DateTime  @default(now())
+  finalizadoEm           DateTime?
 }
 
 model WebhookAlerta {
   id         String   @id @default(cuid())
   nome       String
-  canal      String   @default("WEBHOOK") // WEBHOOK | WHATSAPP | PUSH | SLACK
+  canal      String   @default("WEBHOOK") // WEBHOOK | WHATSAPP | PUSH | SLACK | EMAIL
   urlDestino String
   ativo      Boolean  @default(true)
   criadoEm   DateTime @default(now())
+}
+
+model LogEntregaWebhook {
+  id         String   @id @default(cuid())
+  webhookId  String?
+  canal      String
+  urlDestino String
+  evento     String
+  sucesso    Boolean
+  httpStatus Int?
+  tentativas Int      @default(1)
+  erro       String?
+  criadoEm   DateTime @default(now())
+}
+
+model CacheDatajud {
+  id               String   @id @default(cuid())
+  numeroProcesso   String   @unique
+  indiceConsultado String
+  dadosJson        String
+  expiraEm         DateTime
+  atualizadoEm     DateTime @updatedAt
+}
+
+model LogSaudeTribunal {
+  id           String   @id @default(cuid())
+  servico      String
+  sistema      String
+  status       String   // ONLINE | INSTAVEL | INDISPONIVEL
+  httpStatus   Int
+  latenciaMs   Int
+  verificadoEm DateTime @default(now())
+}
+
+model LinkCompartilhamento {
+  id             String   @id @default(cuid())
+  token          String   @unique
+  tipo           String   // CORRESPONDENTE_48H | PORTAL_CLIENTE
+  escopo         String   // Número CNJ (20 dígitos) ou Nome do Cliente
+  anonimizarLgpd Boolean  @default(false)
+  expiraEm       DateTime
+  criadoEm       DateTime @default(now())
 }

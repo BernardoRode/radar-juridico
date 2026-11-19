@@ -53,7 +53,15 @@ export interface ResultadoVarreduraRadar {
     tipoAto: string;
     prazoFatal?: string;
     statusConcorrencia: string;
+    substitutoFerias?: string;
   }>;
+}
+
+function estaEmFeriasHoje(emFeriasAte?: string | null): boolean {
+  if (!emFeriasAte) return false;
+  const parsed = new Date(emFeriasAte);
+  if (isNaN(parsed.getTime())) return false;
+  return parsed.getTime() >= Date.now();
 }
 
 /**
@@ -79,6 +87,17 @@ export async function executarVarreduraRadar(
       prisma.advogadoEscritorio.findMany({ where: { ativo: true } }),
       obterOabsEscritorio(),
     ]);
+
+    // Issue #47: Mapeia OABs em férias para redirecionamento automático ao substituto
+    const mapaSubstitutoFerias = new Map<string, string>();
+    for (const adv of advogados) {
+      if (estaEmFeriasHoje(adv.emFeriasAte) && adv.advogadoSubstituto) {
+        mapaSubstitutoFerias.set(
+          `${adv.numeroOab}${adv.ufOab}`.toUpperCase(),
+          `${adv.advogadoSubstituto} (férias de ${adv.nome} até ${adv.emFeriasAte})`
+        );
+      }
+    }
 
     const todasComunicacoes = new Map<number, ComunicacaoCNJ>();
     const erros: string[] = [];
@@ -130,9 +149,12 @@ export async function executarVarreduraRadar(
     }
 
     // 3. Issue #41: Varre também pelo Número Único dos processos já vinculados ao Nosso Escritório
-    // para blindar contra publicações em que a Secretaria da Vara esquece de cadastrar nossa OAB!
+    // (excluindo homônimos ignorados) para blindar contra omissão de OAB pela secretaria da Vara
     const processosNossos = await prisma.processo.findMany({
-      where: { statusConcorrencia: 'NOSSO_ESCRITORIO' },
+      where: {
+        statusConcorrencia: 'NOSSO_ESCRITORIO',
+        ignoradoHomonimo: false,
+      },
       select: { numeroProcesso: true },
       take: 25,
     });
@@ -160,23 +182,77 @@ export async function executarVarreduraRadar(
     const processos = consolidarProcessosAutomaticamente(enriquecidas);
     const { processosSalvos } = await salvarRadarNoBanco(processos);
 
+    // Issue #74: Deduplicação de alertas críticos (evita reenviar alerta do mesmo processo em < 12h)
+    const dozeHorasAtras = new Date(Date.now() - 12 * 60 * 60 * 1000);
+    const processosRecemAlertados = new Set(
+      (
+        await prisma.processo.findMany({
+          where: {
+            OR: [
+              { ignoradoHomonimo: true },
+              { ultimoAlertaEnviadoEm: { gte: dozeHorasAtras } },
+            ],
+          },
+          select: { numeroProcesso: true },
+        })
+      ).map((p) => p.numeroProcesso)
+    );
+
     const alertasDestaque = enriquecidas
-      .filter((p) => p.inteligencia.alertasAutomaticos.urgencia === 'ALTA')
+      .filter((p) => {
+        if (p.inteligencia.alertasAutomaticos.urgencia !== 'ALTA') return false;
+        const limpo = (p.numero_processo || '').replace(/[^0-9]/g, '');
+        return !processosRecemAlertados.has(limpo);
+      })
       .slice(0, 20)
-      .map((p) => ({
-        numeroProcesso: p.numeroprocessocommascara || p.numero_processo,
-        tribunal: p.siglaTribunal,
-        tipoAto: p.inteligencia.alertasAutomaticos.tipoAtoDetectado,
-        prazoFatal: p.inteligencia.alertasAutomaticos.prazoFatal,
-        statusConcorrencia: p.inteligencia.statusConcorrencia,
-      }));
+      .map((p) => {
+        let substitutoFerias: string | undefined;
+        for (const adv of p.inteligencia.advogadosIdentificados || []) {
+          const chave = `${adv.oab}${adv.uf}`.toUpperCase();
+          if (mapaSubstitutoFerias.has(chave)) {
+            substitutoFerias = mapaSubstitutoFerias.get(chave);
+            break;
+          }
+        }
+        return {
+          numeroLimpo: (p.numero_processo || '').replace(/[^0-9]/g, ''),
+          numeroProcesso: p.numeroprocessocommascara || p.numero_processo,
+          tribunal: p.siglaTribunal,
+          tipoAto: p.inteligencia.alertasAutomaticos.tipoAtoDetectado,
+          prazoFatal: p.inteligencia.alertasAutomaticos.prazoFatal,
+          statusConcorrencia: p.inteligencia.statusConcorrencia,
+          substitutoFerias,
+        };
+      });
 
     const statusFinal: 'SUCESSO' | 'PARCIAL' =
       erros.length > 0 ? 'PARCIAL' : 'SUCESSO';
 
     if (alertasDestaque.length > 0) {
       await dispararWebhooksAlertaAlta(alertasDestaque);
+      const numerosAlertados = Array.from(
+        new Set(alertasDestaque.map((a) => a.numeroLimpo).filter(Boolean))
+      );
+      if (numerosAlertados.length > 0) {
+        await prisma.processo
+          .updateMany({
+            where: { numeroProcesso: { in: numerosAlertados } },
+            data: { ultimoAlertaEnviadoEm: new Date() },
+          })
+          .catch(() => {});
+      }
     }
+
+    const alertasPublicos = alertasDestaque.map(
+      ({ numeroProcesso, tribunal, tipoAto, prazoFatal, statusConcorrencia, substitutoFerias }) => ({
+        numeroProcesso,
+        tribunal,
+        tipoAto,
+        prazoFatal,
+        statusConcorrencia,
+        substitutoFerias,
+      })
+    );
 
     await prisma.execucaoRadar.update({
       where: { id: execucao.id },
@@ -185,7 +261,7 @@ export async function executarVarreduraRadar(
         oabsVarredura: advogados.length,
         publicacoesEncontradas: enriquecidas.length,
         processosSalvos,
-        alertasAlta: alertasDestaque.length,
+        alertasAlta: alertasPublicos.length,
         status: statusFinal,
         detalhesJson: JSON.stringify({ erros, periodo: { inicio, hoje } }),
         finalizadoEm: new Date(),
@@ -199,9 +275,9 @@ export async function executarVarreduraRadar(
       oabsVarredura: advogados.length,
       publicacoesEncontradas: enriquecidas.length,
       processosSalvos,
-      alertasAlta: alertasDestaque.length,
+      alertasAlta: alertasPublicos.length,
       status: statusFinal,
-      alertasDestaque,
+      alertasDestaque: alertasPublicos,
     };
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Erro desconhecido';

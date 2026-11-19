@@ -5,7 +5,7 @@ const cacheDatajudMemoria = new Map<
   string,
   { expiraEm: number; dados: DadosDatajud }
 >();
-const CACHE_TTL_MS = 1000 * 60 * 30; // 30 minutos (Issue #34: Cache Anti-429)
+const CACHE_TTL_MS = 1000 * 60 * 30; // 30 minutos (Issue #34: Cache Anti-429 L1 + L2 Prisma)
 
 const DATAJUD_PUBLIC_API_KEY =
   process.env.DATAJUD_API_KEY ||
@@ -118,15 +118,35 @@ function formatarDataAjuizamento(raw?: string): string | undefined {
 /**
  * Consulta a API Pública do Datajud (CNJ) para obter capa, classe, assuntos (TPU),
  * data de distribuição/ajuizamento e a árvore completa de movimentações do processo.
+ * Usa cache em 2 níveis (Memória L1 + Banco Prisma L2 `CacheDatajud`) para proteção Anti-429.
  */
 export async function consultarDatajudProcesso(
   numeroProcesso: string,
   siglaTribunal?: string
 ): Promise<DadosDatajud> {
   const numLimpo = numeroProcesso.replace(/[^0-9]/g, '');
+
+  // L1: Cache em memória
   const emCache = cacheDatajudMemoria.get(numLimpo);
   if (emCache && emCache.expiraEm > Date.now()) {
     return { ...emCache.dados, origemCache: true };
+  }
+
+  // L2: Cache persistido no banco (Issue #34)
+  try {
+    const cacheDb = await prisma.cacheDatajud.findUnique({
+      where: { numeroProcesso: numLimpo },
+    });
+    if (cacheDb && cacheDb.expiraEm.getTime() > Date.now()) {
+      const dadosDb = JSON.parse(cacheDb.dadosJson) as DadosDatajud;
+      cacheDatajudMemoria.set(numLimpo, {
+        expiraEm: cacheDb.expiraEm.getTime(),
+        dados: dadosDb,
+      });
+      return { ...dadosDb, origemCache: true };
+    }
+  } catch {
+    // Continua consulta ao vivo se tabela não disponível
   }
 
   const indice = resolverIndiceDatajud(numLimpo, siglaTribunal);
@@ -245,12 +265,30 @@ export async function consultarDatajudProcesso(
       protocoloRecenteDetectado,
     };
 
+    const expiraEmMs = Date.now() + CACHE_TTL_MS;
     cacheDatajudMemoria.set(numLimpo, {
-      expiraEm: Date.now() + CACHE_TTL_MS,
+      expiraEm: expiraEmMs,
       dados: resultadoFinal,
     });
 
-    // Salva enriquecimento no banco SQLite se o processo existir
+    // Persiste cache L2 + enriquecimento do processo no banco
+    prisma.cacheDatajud
+      .upsert({
+        where: { numeroProcesso: numLimpo },
+        create: {
+          numeroProcesso: numLimpo,
+          indiceConsultado: indice,
+          dadosJson: JSON.stringify(resultadoFinal),
+          expiraEm: new Date(expiraEmMs),
+        },
+        update: {
+          indiceConsultado: indice,
+          dadosJson: JSON.stringify(resultadoFinal),
+          expiraEm: new Date(expiraEmMs),
+        },
+      })
+      .catch(() => {});
+
     prisma.processo
       .update({
         where: { numeroProcesso: numLimpo },
