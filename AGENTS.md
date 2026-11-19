@@ -129,4 +129,35 @@ O **Radar Jurídico** não é apenas um buscador passivo de Diário Oficial. Ele
   - Cache persistente L2 do Datajud (`CacheDatajud`), histórico de quedas (`LogSaudeTribunal`), logs de entrega (`LogEntregaWebhook`), proteção anti-SSRF (`src/lib/seguranca.ts`) e Rate Limiting (`src/lib/rate-limit.ts`).
   - Links temporários assinados (48h Correspondente & Portal do Cliente White-Label): `POST/GET /api/compartilhar` e página `/compartilhado/[token]`.
   - PWA completo com Service Worker (`public/sw.js`) e atalhos de teclado (`J`/`K`/`E`/`C`).
-- **Qualidade & CI:** `npm test` (Vitest em `src/lib/__tests__/radar-core.test.ts`), `npm run typecheck` e `.github/workflows/ci.yml`.
+- **Qualidade & CI:** `npm test` (Vitest em `src/lib/__tests__/radar-core.test.ts` — 20 testes), `npm run typecheck` e `.github/workflows/ci.yml`.
+
+---
+
+## 5. 🏠 Handoff Exato para o Agente do PC de Casa (Estado Atual & Próximos Passos)
+
+### O que já está 100% implementado e fechado no código (`#1`–`#65`, `#69`, `#71`, `#73`, `#75`, `#76`, `#77`, `#78`, `#79`, `#80`):
+- **Pool Multi-IA Gratuito com Ciclo, Failover & Concorrência (`src/lib/ia-router.ts`):** suporta 10 provedores gratuitos (`GEMINI`, `GROQ`, `CEREBRAS`, `OPENROUTER`, `MISTRAL`, `NVIDIA`, `HUGGINGFACE`, `CLOUDFLARE`, `COHERE`, `OLLAMA` + `OPENAI`), distribuição paralela *Least-Loaded Round-Robin* (`#76`), cooldown automático em HTTP 429 e roteamento `LEVE` vs `FORTE`.
+- **Economia de Tokens (`src/lib/ia-cache.ts` + `CacheAnaliseIA`):** Cache SHA-256 de análises/minutas e *Context Pruning* removendo ruídos do DJEN/PJe (`#77`).
+- **Memória Coletiva Anonimizada LGPD (`src/lib/memoria-coletiva.ts` + `/api/ia/memoria-coletiva`):** `PerfilColetivoVara` e `ModeloMinutaValidada` sem nomes/CPFs/CNJs (`#78`).
+- **Autenticação, Multi-Tenant SaaS & B2B (`#69`, `#79`, `#80`):**
+  - Tabelas `Organizacao`, `Usuario`, `ApiKeyCliente` + `organizacaoId` nas tabelas operacionais (`src/lib/tenant.ts`).
+  - Login/Registro com `scrypt` + JWT HS256 (`HttpOnly` + Bearer) em `/api/auth/register|login|logout|me`, página `/login` e `src/middleware.ts` Edge (respeitando `ENFORCE_AUTH="false"` em dev local).
+  - Documentação OpenAPI 3.1 interativa em `/docs` (`/api/openapi.json`) e gestão de API Keys B2B (`rk_live_...`) em `/api/api-keys`.
+- **Frontend Modular (`src/components/`):** `PainelCockpitKanban`, `PainelBiJurimetria`, `PainelFeedPublicacoes`, `PainelConfiguracoes`, `PainelB2BeMemoriaColetiva`, `PainelApiDocs` e `PwaEStatusBanner`.
+- **Tribunais validados ao vivo (`#71`):** DJEN (`TRT4`, `TJRS`, `TJSP`), PJe TRT4, eproc TRF4 e Datajud TRF4 com Cache L2 funcionando.
+
+### O que o Agente do PC de Casa deve fazer assim que o usuário abrir o projeto lá:
+1. **Sincronizar ambiente local:**
+   ```bash
+   git pull origin main
+   npm install
+   npx prisma db push
+   npx prisma generate
+   npm test
+   ```
+2. **Atacar as únicas 3 issues locais pendentes (Custo R$ 0):**
+   - **Issue #67 (Principal):** Ajudar o usuário a colar no `.env` as chaves gratuitas do Pool Multi-IA (ver lista completa e links no `.env.example`: Google AI Studio `GEMINI_API_KEY`, `GROQ_API_KEY`, `CLOUDFLARE_ACCOUNT_ID`+`CLOUDFLARE_API_TOKEN`, `OPENROUTER_API_KEY`, `NVIDIA_API_KEY`, `CEREBRAS_API_KEY`, `MISTRAL_API_KEY`, `HUGGINGFACE_API_KEY`, `COHERE_API_KEY` ou `OLLAMA_BASE_URL`) e testar ao vivo `/api/ia/analisar`, `/api/ia/minuta`, `/api/ia/chat-base` e OCR de PDF.
+   - **Issue #70:** Conectar ao menos 1 canal real gratuito de alerta (Slack Incoming Webhook, Resend Free ou Evolution API/n8n para WhatsApp) e validar na tabela `LogEntregaWebhook`.
+   - **Issue #72:** Cadastrar as OABs reais do escritório (`AdvogadoEscritorio`) e clientes/CNPJs monitorados (`ClienteMonitorado`), disparar a primeira varredura real e confirmar `prontoParaUsoLocal: true` em `/api/config/status`.
+3. **Issues estacionadas de propósito (NÃO executar ainda até o usuário decidir sair de teste):**
+   - **#66** (PostgreSQL em nuvem), **#68** (Deploy Vercel + Crons 24/7 + `ENFORCE_AUTH="true"`) e **#74** (Upstash Redis + `pgvector`).
