@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Search,
   Building2,
@@ -232,6 +232,80 @@ export default function RadarJuridicoHome() {
   const [perguntaRag, setPerguntaRag] = useState('');
   const [respostaRag, setRespostaRag] = useState<string | null>(null);
   const [consultandoRag, setConsultandoRag] = useState(false);
+  const [linkCompartilhadoCopiado, setLinkCompartilhadoCopiado] = useState<string | null>(null);
+  const [prazoBaixadoAviso, setPrazoBaixadoAviso] = useState<string | null>(null);
+
+  async function gerarLinkCorrespondente48h(numeroProcesso: string) {
+    try {
+      const res = await fetch('/api/compartilhar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tipo: 'CORRESPONDENTE_48H', escopo: numeroProcesso, horasValidade: 48 }),
+      });
+      const json = await res.json();
+      if (json?.link?.urlPublica) {
+        if (typeof navigator !== 'undefined' && navigator.clipboard) {
+          navigator.clipboard.writeText(json.link.urlPublica).catch(() => {});
+        }
+        setLinkCompartilhadoCopiado(json.link.urlPublica);
+        setTimeout(() => setLinkCompartilhadoCopiado(null), 5000);
+      }
+    } catch {
+      // Silencioso
+    }
+  }
+
+  async function marcarPrazoBaixadoNoBanco(numeroProcesso: string) {
+    try {
+      await fetch('/api/processos', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ numeroProcesso, prazoBaixado: true, minutaPronta: true }),
+      });
+      setPrazoBaixadoAviso(numeroProcesso);
+      setTimeout(() => setPrazoBaixadoAviso(null), 3500);
+    } catch {
+      // Silencioso
+    }
+  }
+
+  // Issue #49: Atalhos de teclado globais na triagem (J/K navegar, E extrair PDF, C confirmar/baixar prazo)
+  useEffect(() => {
+    function onKeyDown(ev: KeyboardEvent) {
+      const tag = (ev.target as HTMLElement | null)?.tagName?.toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || ev.ctrlKey || ev.metaKey || ev.altKey) {
+        return;
+      }
+      const lista = processos.filter(
+        (proc) => !homonimosIgnorados[proc.numeroProcesso]
+      );
+      if (lista.length === 0) return;
+      const idxAtual = processoSelecionado
+        ? lista.findIndex((proc) => proc.numeroProcesso === processoSelecionado.numeroProcesso)
+        : -1;
+      const key = ev.key.toLowerCase();
+      if (key === 'j') {
+        ev.preventDefault();
+        const prox = lista[(idxAtual + 1) % lista.length];
+        if (prox) setProcessoSelecionado(prox);
+      } else if (key === 'k') {
+        ev.preventDefault();
+        const ant = lista[(idxAtual - 1 + lista.length) % lista.length];
+        if (ant) setProcessoSelecionado(ant);
+      } else if (key === 'e' && processoSelecionado) {
+        const pubComLink = processoSelecionado.historicoPublicacoes.find((pub) => pub.link);
+        if (pubComLink?.link) {
+          ev.preventDefault();
+          inspecionarLinkTribunal(pubComLink.link);
+        }
+      } else if (key === 'c' && processoSelecionado) {
+        ev.preventDefault();
+        marcarPrazoBaixadoNoBanco(processoSelecionado.numeroProcesso);
+      }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [processos, processoSelecionado, homonimosIgnorados]);
 
   async function consultarChatRag(e: React.FormEvent) {
     e.preventDefault();
@@ -1238,15 +1312,39 @@ export default function RadarJuridicoHome() {
                         </button>
                         <button
                           type="button"
-                          onClick={() =>
+                          onClick={() => {
                             setHomonimosIgnorados((prev) => ({
                               ...prev,
                               [processoSelecionado.numeroProcesso]: true,
-                            }))
-                          }
+                            }));
+                            fetch('/api/processos', {
+                              method: 'PATCH',
+                              headers: { 'Content-Type': 'application/json' },
+                              body: JSON.stringify({
+                                numeroProcesso: processoSelecionado.numeroProcesso,
+                                ignoradoHomonimo: true,
+                              }),
+                            }).catch(() => {});
+                          }}
                           className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs cursor-pointer"
                         >
                           Ignorar Homônimo (#44)
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => marcarPrazoBaixadoNoBanco(processoSelecionado.numeroProcesso)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-xs font-semibold cursor-pointer"
+                        >
+                          {prazoBaixadoAviso === processoSelecionado.numeroProcesso
+                            ? '? Baixa Salva!'
+                            : '? Baixar Prazo (C)'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => gerarLinkCorrespondente48h(processoSelecionado.numeroProcesso)}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/40 text-cyan-300 text-xs font-semibold cursor-pointer"
+                        >
+                          {linkCompartilhadoCopiado ? '? Link 48h Copiado!' : '?? Link 48h (#60)'}
                         </button>
                       </div>
                       {processoSelecionado.hashProvaCaptura && (
