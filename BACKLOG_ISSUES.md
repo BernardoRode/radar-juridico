@@ -411,9 +411,9 @@ As 65 issues originais do código local (#1 a #65) estão concluídas e fechadas
 
 ---
 
-## Fase 12: Inteligência Multi-IA Avançada, Economia de Tokens & Memória Coletiva (#76–#78)
+## Fase 12: Multi-IA Avançada, Economia de Tokens, Memória Coletiva & SaaS B2B (#76–#80)
 
-*(Planejadas para execução após configuração das chaves gratuitas no PC de casa — sincronizar no GitHub Issues assim que logar no `gh` CLI).*
+*(Documentadas localmente — como o `gh` CLI não está instalado neste PC, rode os comandos do final desta seção no PC de casa para abrir `#76`–`#80` no GitHub Issues em segundos).*
 
 ### Issue #76: [Multi-IA Concorrência] Distribuição Paralela por Carga (*Least-Loaded Round-Robin*) para Múltiplos Clientes Simultâneos
 - **Status:** 📋 Planejada (abrir no GitHub como #76)
@@ -432,3 +432,24 @@ As 65 issues originais do código local (#1 a #65) estão concluídas e fechadas
   - **Perfil Coletivo por Vara / Magistrado (`assinadoPor`):** registrar teses aceitas, súmulas citadas e taxa de liminares para enriquecer automaticamente as análises de outros clientes que caírem na mesma Vara;
   - **Biblioteca Viva de Pré-Minutas Validadas (Few-Shot):** salvar estruturas jurídicas anonimizadas aprovadas por advogados para melhorar a qualidade das peças geradas para os próximos clientes;
   - **Cache Compartilhado de Despachos-Padrão Públicos do DJEN:** reaproveitar interpretações de atos rotineiros de cartório sem gastar novos tokens.
+
+### Issue #79: [Multi-Tenant SaaS] Isolamento Completo de Dados por `organizacaoId` nas Tabelas e Rotas da API
+- **Status:** 📋 Planejada (abrir no GitHub como #79)
+- **Prioridade:** P0 (Obrigatória antes de vender para múltiplos escritórios no mesmo servidor)
+- **Objetivo:** Adicionar `organizacaoId` nas tabelas `ClienteMonitorado`, `AdvogadoEscritorio`, `Processo`, `WebhookAlerta`, `ExecucaoRadar` e `LinkCompartilhamento`, filtrando todas as queries/rotas `/api/*` pela organização do usuário autenticado (JWT/API Key) para garantir isolamento total entre clientes.
+
+### Issue #80: [API B2B & OpenAPI] Documentação Interativa Swagger/OpenAPI (`/api/openapi.json` + `/docs`) e Gestão de API Keys por Cliente
+- **Status:** 📋 Planejada (abrir no GitHub como #80)
+- **Prioridade:** P1 (Alta para comercialização B2B da API)
+- **Objetivo:** Expor especificação OpenAPI 3.1 cobrindo todas as 22 rotas REST + página interativa de testes (`/docs`), além de tabela `ApiKeyCliente` vinculada à `Organizacao` com planos, cota mensal de requisições e painel de consumo por cliente.
+
+---
+
+### Comandos rápidos (`gh` CLI no PC de casa) para abrir `#76`–`#80` no GitHub
+```bash
+gh issue create --title "[Multi-IA Concorrência] Distribuição Paralela por Carga (Least-Loaded Round-Robin)" --body "Evoluir src/lib/ia-router.ts com contador emAndamentoPorSlot e reserva atômica do slot antes do fetch para atender 10+ clientes simultâneos sem fila e sem estourar RPM de um único provedor."
+gh issue create --title "[Economia de Tokens] Cache de Análises IA por Hash SHA-256 + Context Pruning" --body "Criar tabela CacheAnaliseIA no Prisma indexada por SHA-256 do texto normalizado, limpar cabeçalhos/rodapés repetitivos do DJEN/PJe antes de enviar à LLM e rotear tarefas leves vs. pesadas."
+gh issue create --title "[Memória Coletiva & Auto-Alimentação] Base de Inteligência Jurídica Anonimizada (LGPD)" --body "Criar camada de aprendizado coletivo anonimizada entre clientes: perfil por Vara/Magistrado, biblioteca viva de pré-minutas validadas (few-shot) e cache compartilhado de despachos-padrão do DJEN."
+gh issue create --title "[Multi-Tenant SaaS] Isolamento Completo de Dados por organizacaoId" --body "Adicionar organizacaoId em ClienteMonitorado, AdvogadoEscritorio, Processo, WebhookAlerta, ExecucaoRadar e LinkCompartilhamento, filtrando todas as rotas /api/* pela organização autenticada."
+gh issue create --title "[API B2B & OpenAPI] Documentação Swagger/OpenAPI (/docs) e Gestão de API Keys por Cliente" --body "Expor especificação OpenAPI 3.1 das 22 rotas REST com página interativa /docs e tabela ApiKeyCliente por organização com planos e contagem de consumo."
+```
