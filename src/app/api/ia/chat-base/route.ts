@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { chamarLlmTexto } from '@/lib/ia-juridica';
 
 /**
  * POST /api/ia/chat-base
- * Issue #27: Busca Semântica / RAG sobre todos os processos, publicações e PDFs extraídos
- * salvos no banco de dados SQLite do escritório.
+ * Issue #27 + Issue #69: Busca Semântica / RAG sobre todos os processos, publicações e PDFs extraídos
+ * salvos no banco do escritório, com síntese real por LLM (Gemini/OpenAI) quando configurada.
  */
 export async function POST(request: NextRequest) {
   try {
@@ -20,20 +21,28 @@ export async function POST(request: NextRequest) {
 
     const termos = pergunta
       .toLowerCase()
-      .replace(/[?.,!;]/g, '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/[?.,!;:"'()]/g, ' ')
       .split(/\s+/)
       .filter((t) => t.length >= 3);
+
+    const normalizar = (s: string) =>
+      s
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '');
 
     const [publicacoes, documentos] = await Promise.all([
       prisma.publicacao.findMany({
         include: { processo: true },
         orderBy: { criadoEm: 'desc' },
-        take: 150,
+        take: 400,
       }),
       prisma.documentoOriginal.findMany({
         include: { processo: true },
         orderBy: { criadoEm: 'desc' },
-        take: 100,
+        take: 250,
       }),
     ]);
 
@@ -42,18 +51,22 @@ export async function POST(request: NextRequest) {
       processo: string;
       tribunal: string;
       trecho: string;
+      textoCompleto: string;
       pontos: number;
     }> = [];
 
     for (const pub of publicacoes) {
-      const txt = `${pub.texto} ${pub.tipoAtoDetectado} ${pub.processo.numeroFormatado} ${pub.processo.siglaTribunal}`.toLowerCase();
+      const txt = normalizar(
+        `${pub.texto} ${pub.tipoAtoDetectado} ${pub.processo.numeroFormatado} ${pub.processo.siglaTribunal} ${pub.processo.orgaoJulgador} ${pub.processo.partesJson || ''} ${pub.valorDetectado || ''}`
+      );
       const pontos = termos.reduce((acc, t) => acc + (txt.includes(t) ? 1 : 0), 0);
-      if (pontos > 0 || trechosRelevantes.length < 3) {
+      if (pontos > 0) {
         trechosRelevantes.push({
-          fonte: `Publicação DJEN (${pub.dataDisponibilizacao})`,
+          fonte: `Publicação DJEN (${pub.dataDisponibilizacao}) — ${pub.tipoAtoDetectado}`,
           processo: pub.processo.numeroFormatado,
           tribunal: pub.processo.siglaTribunal,
-          trecho: pub.texto.slice(0, 320),
+          trecho: pub.texto.slice(0, 360),
+          textoCompleto: pub.texto.slice(0, 1400),
           pontos,
         });
       }
@@ -61,14 +74,17 @@ export async function POST(request: NextRequest) {
 
     for (const doc of documentos) {
       if (!doc.textoExtraido) continue;
-      const txt = `${doc.textoExtraido} ${doc.tituloDocumento || ''} ${doc.assinadoPor || ''}`.toLowerCase();
+      const txt = normalizar(
+        `${doc.textoExtraido} ${doc.tituloDocumento || ''} ${doc.assinadoPor || ''} ${doc.processo?.numeroFormatado || ''}`
+      );
       const pontos = termos.reduce((acc, t) => acc + (txt.includes(t) ? 2 : 0), 0);
       if (pontos > 0) {
         trechosRelevantes.push({
           fonte: `PDF Extraído (${doc.sistema} — Assinado por: ${doc.assinadoPor || 'N/I'})`,
           processo: doc.processo?.numeroFormatado || doc.urlOriginal.slice(0, 45),
           tribunal: doc.processo?.siglaTribunal || doc.sistema,
-          trecho: doc.textoExtraido.slice(0, 350),
+          trecho: doc.textoExtraido.slice(0, 380),
+          textoCompleto: doc.textoExtraido.slice(0, 1600),
           pontos,
         });
       }
@@ -76,25 +92,62 @@ export async function POST(request: NextRequest) {
 
     const topContexto = trechosRelevantes
       .sort((a, b) => b.pontos - a.pontos)
-      .slice(0, 5);
+      .slice(0, 8);
 
-    const respostaSintetizada =
-      topContexto.length === 0
-        ? 'Ainda não há publicações ou PDFs gravados no banco local que correspondam aos termos pesquisados. Dispare uma busca no Radar ou extraia um link do PJe primeiro.'
-        : `Encontrei ${topContexto.length} registro(s) relevante(s) na base local do escritório para "${pergunta}":\n\n` +
-          topContexto
-            .map(
-              (c, idx) =>
-                `${idx + 1}. [${c.tribunal} — Proc. ${c.processo}] (${c.fonte}):\n"${c.trecho.replace(/\s+/g, ' ')}..."`
-            )
-            .join('\n\n');
+    if (topContexto.length === 0) {
+      return NextResponse.json({
+        sucesso: true,
+        pergunta,
+        modo: 'SEM_RESULTADOS',
+        totalFontesConsultadas: publicacoes.length + documentos.length,
+        resposta:
+          'Ainda não há publicações ou PDFs gravados no banco local que correspondam aos termos pesquisados. Dispare uma busca no Radar ou extraia um link do PJe primeiro.',
+        fontes: [],
+      });
+    }
+
+    // Tenta síntese RAG com LLM real (Gemini / OpenAI) fundamentada exclusivamente nas fontes recuperadas
+    const contextoFormatado = topContexto
+      .map(
+        (c, idx) =>
+          `[FONTE ${idx + 1}] Processo: ${c.processo} | Tribunal: ${c.tribunal} | Origem: ${c.fonte}\nConteúdo: ${c.textoCompleto}`
+      )
+      .join('\n\n---\n\n');
+
+    const llmRes = await chamarLlmTexto(
+      `Pergunta do advogado: "${pergunta}"
+
+Responda de forma objetiva e analítica usando EXCLUSIVAMENTE os documentos recuperados da base do escritório abaixo. Cite explicitamente o número do processo, o tribunal e a fonte de cada informação. Se alguma informação pedida não estiver nos trechos, diga claramente o que não foi encontrado.
+
+FONTES RECUPERADAS:
+${contextoFormatado}`,
+      'Você é um assistente jurídico RAG de alta precisão. Nunca invente processos, valores ou decisões que não constem nas fontes fornecidas.'
+    );
+
+    const respostaFinal = llmRes
+      ? llmRes.texto
+      : `Encontrei ${topContexto.length} registro(s) relevante(s) na base local do escritório para "${pergunta}" (modo busca lexical — configure GEMINI_API_KEY ou OPENAI_API_KEY para síntese por IA):\n\n` +
+        topContexto
+          .slice(0, 5)
+          .map(
+            (c, idx) =>
+              `${idx + 1}. [${c.tribunal} — Proc. ${c.processo}] (${c.fonte}):\n"${c.trecho.replace(/\s+/g, ' ')}..."`
+          )
+          .join('\n\n');
 
     return NextResponse.json({
       sucesso: true,
       pergunta,
+      modo: llmRes ? `RAG_${llmRes.modo}` : 'BUSCA_LEXICAL_FALLBACK',
       totalFontesConsultadas: publicacoes.length + documentos.length,
-      resposta: respostaSintetizada,
-      fontes: topContexto,
+      resposta: respostaFinal,
+      fontes: topContexto.map(({ fonte, processo, tribunal, trecho, pontos }) => ({
+        fonte,
+        processo,
+        tribunal,
+        trecho,
+        pontos,
+      })),
     });
   } catch (error: unknown) {
     const msg = error instanceof Error ? error.message : 'Erro na busca RAG';

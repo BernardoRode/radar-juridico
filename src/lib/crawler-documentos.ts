@@ -1,5 +1,6 @@
 import { extractText } from 'unpdf';
 import { extrairAlertasTexto } from '@/lib/inteligencia';
+import { extrairTextoPdfViaOcrLlm } from '@/lib/ia-juridica';
 import { ResultadoExtracaoDocumento } from '@/types/juridico';
 
 const USER_AGENT =
@@ -43,14 +44,41 @@ function limparHtmlParaTexto(html: string): string {
     .trim();
 }
 
-async function extrairTextoDePdf(
+async function extrairTextoDePdfComOcr(
   pdfBuffer: Buffer
-): Promise<{ texto: string; totalPaginas: number }> {
-  const uint8 = new Uint8Array(pdfBuffer);
-  const { text, totalPages } = await extractText(uint8, { mergePages: true });
+): Promise<{ texto: string; totalPaginas: number; usouOcr: boolean }> {
+  let texto = '';
+  let totalPaginas = 1;
+
+  try {
+    const uint8 = new Uint8Array(pdfBuffer);
+    const info = await extractText(uint8, { mergePages: true });
+    texto = (info.text || '').trim();
+    totalPaginas = info.totalPages || 1;
+  } catch {
+    texto = '';
+  }
+
+  // Issue #28: Fallback de OCR real via Gemini Multimodal quando o PDF é imagem escaneada (sem texto selecionável)
+  if (texto.length < 40) {
+    const ocr = await extrairTextoPdfViaOcrLlm(pdfBuffer);
+    if (ocr?.texto) {
+      return {
+        texto: ocr.texto,
+        totalPaginas,
+        usouOcr: true,
+      };
+    }
+    if (!texto) {
+      texto =
+        '[PDF binário obtido com sucesso, mas sem camada de texto selecionável (imagem escaneada). Configure GEMINI_API_KEY no .env para ativar OCR automático.]';
+    }
+  }
+
   return {
-    texto: (text || '').trim(),
-    totalPaginas: totalPages || 1,
+    texto,
+    totalPaginas,
+    usouOcr: false,
   };
 }
 
@@ -143,17 +171,8 @@ async function extrairPje(parsedUrl: URL): Promise<ExtracaoComBinario> {
   }
 
   const pdfBuffer = Buffer.from(dados.conteudoPdf, 'base64');
-  let textoExtraido = '';
-  let totalPaginas = 1;
-
-  try {
-    const pdfInfo = await extrairTextoDePdf(pdfBuffer);
-    textoExtraido = pdfInfo.texto;
-    totalPaginas = pdfInfo.totalPaginas;
-  } catch {
-    textoExtraido =
-      '[PDF binário obtido com sucesso, mas não foi possível extrair texto selecionável.]';
-  }
+  const { texto: textoExtraido, totalPaginas, usouOcr } =
+    await extrairTextoDePdfComOcr(pdfBuffer);
 
   const alertasDoDocumento = textoExtraido
     ? extrairAlertasTexto(textoExtraido, dados.tituloDocumento)
@@ -176,8 +195,9 @@ async function extrairPje(parsedUrl: URL): Promise<ExtracaoComBinario> {
       temPdfDisponivel: true,
       textoExtraido,
       alertasDoDocumento,
-      mensagem:
-        'Documento original e assinatura digital extraídos com sucesso via API pública do PJe.',
+      mensagem: usouOcr
+        ? 'PDF escaneado obtido via PJe e transcrito automaticamente por OCR Multimodal (Gemini).'
+        : 'Documento original e assinatura digital extraídos com sucesso via API pública do PJe.',
     },
   };
 }
@@ -207,7 +227,8 @@ async function extrairEprocOuGenerico(
   const rawBuffer = Buffer.from(await res.arrayBuffer());
 
   if (contentType.includes('application/pdf')) {
-    const { texto, totalPaginas } = await extrairTextoDePdf(rawBuffer);
+    const { texto, totalPaginas, usouOcr } =
+      await extrairTextoDePdfComOcr(rawBuffer);
     return {
       pdfBuffer: rawBuffer,
       resultado: {
@@ -220,7 +241,9 @@ async function extrairEprocOuGenerico(
         temPdfDisponivel: true,
         textoExtraido: texto,
         alertasDoDocumento: texto ? extrairAlertasTexto(texto) : undefined,
-        mensagem: 'PDF original baixado e texto extraído com sucesso.',
+        mensagem: usouOcr
+          ? 'PDF escaneado baixado e transcrito automaticamente por OCR Multimodal (Gemini).'
+          : 'PDF original baixado e texto extraído com sucesso.',
       },
     };
   }
