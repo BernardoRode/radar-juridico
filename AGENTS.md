@@ -117,3 +117,16 @@ O **Radar Jurídico** não é apenas um buscador passivo de Diário Oficial. Ele
 1. **Automação Total (Zero Trabalho Manual):** O advogado nunca deve precisar cadastrar andamentos ou calcular prazos manualmente se a informação puder ser inferida da publicação, do PDF do PJe ou do Datajud.
 2. **Respeito Estrito a Barreiras de Segurança:** Nunca tentar burlar CAPTCHAs (como Cloudflare Turnstile no eproc); sempre detectar a barreira e entregar o link direto para validação humana no navegador.
 3. **Idioma:** Preservar **Português (pt-BR)** em toda a interface, regras de negócio e respostas de API.
+
+
+---
+
+## 4. Atualizações de Prontidão, Segurança, IA Real & CI (Novas Rotas e Testes)
+- **Diagnóstico de Ambiente:** `GET /api/config/status` + barra visual [`PwaEStatusBanner`](src/components/PwaEStatusBanner.tsx) + `.env.example`.
+- **IA Real & OCR Multimodal:** `POST /api/ia/minuta`, `POST /api/ia/chat-base` (RAG) e `crawler-documentos.ts` (OCR de PDFs escaneados) agora consomem `GEMINI_API_KEY` / `OPENAI_API_KEY` quando configurados, mantendo fallback seguro quando ausentes.
+- **Persistência Operacional & Segurança:**
+  - `PATCH /api/processos` (baixa de prazo, homônimo ignorado, check D-2, checklist perícia) e `PATCH /api/config/advogados` (férias e substituto).
+  - Cache persistente L2 do Datajud (`CacheDatajud`), histórico de quedas (`LogSaudeTribunal`), logs de entrega (`LogEntregaWebhook`), proteção anti-SSRF (`src/lib/seguranca.ts`) e Rate Limiting (`src/lib/rate-limit.ts`).
+  - Links temporários assinados (48h Correspondente & Portal do Cliente White-Label): `POST/GET /api/compartilhar` e página `/compartilhado/[token]`.
+  - PWA completo com Service Worker (`public/sw.js`) e atalhos de teclado (`J`/`K`/`E`/`C`).
+- **Qualidade & CI:** `npm test` (Vitest em `src/lib/__tests__/radar-core.test.ts`), `npm run typecheck` e `.github/workflows/ci.yml`.
