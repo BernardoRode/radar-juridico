@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { dispararWebhooksAlertaAlta } from '@/lib/webhooks';
+import { validarUrlWebhookSegura } from '@/lib/seguranca';
 
 export async function GET() {
   try {
@@ -38,6 +39,14 @@ export async function POST(request: NextRequest) {
     if (!nome || !urlDestino.startsWith('http')) {
       return NextResponse.json(
         { sucesso: false, erro: 'Informe nome e uma urlDestino HTTP/HTTPS válida.' },
+        { status: 400 }
+      );
+    }
+
+    const validacao = await validarUrlWebhookSegura(urlDestino);
+    if (!validacao.valida) {
+      return NextResponse.json(
+        { sucesso: false, erro: validacao.motivo || 'URL de webhook bloqueada por segurança.' },
         { status: 400 }
       );
     }

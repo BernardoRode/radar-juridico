@@ -1,3 +1,5 @@
+import crypto from 'crypto';
+
 export type FaseProcessual =
   | 'CITACAO'
   | 'AUDIENCIA'
@@ -475,21 +477,9 @@ export function gerarHashProvaCaptura(
   dataDisponibilizacao: string,
   texto: string
 ): string {
-  const base = `${numeroProcesso}|${dataDisponibilizacao}|${(texto || '').slice(0, 500)}`;
-  let h1 = 0xdeadbeef ^ base.length;
-  let h2 = 0x41c6ce57 ^ base.length;
-  for (let i = 0; i < base.length; i++) {
-    const ch = base.charCodeAt(i);
-    h1 = Math.imul(h1 ^ ch, 2654435761);
-    h2 = Math.imul(h2 ^ ch, 1597334677);
-  }
-  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-  return (
-    'SHA256-' +
-    (h2 >>> 0).toString(16).padStart(8, '0') +
-    (h1 >>> 0).toString(16).padStart(8, '0')
-  ).toUpperCase();
+  const base = `${numeroProcesso}|${dataDisponibilizacao}|${(texto || '').trim()}`;
+  const digest = crypto.createHash('sha256').update(base, 'utf8').digest('hex').toUpperCase();
+  return `SHA256-${digest}`;
 }
 
 /**

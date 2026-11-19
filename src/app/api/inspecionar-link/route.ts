@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { extrairDocumentoPorUrl } from '@/lib/crawler-documentos';
 import { salvarDocumentoExtraidoNoBanco } from '@/lib/persistencia';
+import { validarUrlTribunalPermitida } from '@/lib/seguranca';
 
 /**
  * Endpoint que inspeciona links de validação do PJe (pjekz/validacao) e do eproc (consulta_publica_documento)
@@ -18,11 +19,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    const validacao = validarUrlTribunalPermitida(url);
+    if (!validacao.valida || !validacao.url) {
+      return NextResponse.json(
+        { sucesso: false, erro: validacao.motivo || 'URL não permitida.' },
+        { status: 400 }
+      );
+    }
+
+    const parsedUrl = validacao.url;
     const ehPje = url.includes('pjekz/validacao') || url.includes('pje.');
     const ehEproc = url.includes('eproc') || url.includes('consulta_publica_documento');
 
     // Extrai parâmetros da própria URL do documento (como número do processo, hash, instância)
-    const parsedUrl = new URL(url);
     const parametrosExtraidos: Record<string, string> = {};
     parsedUrl.searchParams.forEach((val, key) => {
       parametrosExtraidos[key] = val;

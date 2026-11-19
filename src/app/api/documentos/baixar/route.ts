@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { extrairDocumentoPorUrl } from '@/lib/crawler-documentos';
+import { validarUrlTribunalPermitida } from '@/lib/seguranca';
 
 /**
  * GET /api/documentos/baixar?url=<url_validacao>
@@ -13,6 +14,14 @@ export async function GET(request: NextRequest) {
     if (!url || !url.startsWith('http')) {
       return NextResponse.json(
         { sucesso: false, erro: 'Informe o parâmetro ?url= com um link válido do PJe ou tribunal.' },
+        { status: 400 }
+      );
+    }
+
+    const validacao = validarUrlTribunalPermitida(url);
+    if (!validacao.valida) {
+      return NextResponse.json(
+        { sucesso: false, erro: validacao.motivo || 'URL não permitida.' },
         { status: 400 }
       );
     }
