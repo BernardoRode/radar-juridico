@@ -4,8 +4,10 @@ const COOKIE_SESSAO = 'radar_session';
 
 const ROTAS_PUBLICAS_PREFIXOS = [
   '/login',
+  '/docs',
   '/compartilhado',
   '/api/auth/',
+  '/api/openapi.json',
   '/api/compartilhar',
   '/api/config/status',
   '/api/saude-tribunais',

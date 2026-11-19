@@ -39,6 +39,9 @@ import {
   gerarHashContextoIA,
   limparRuidoContextoJuridico,
 } from '@/lib/ia-cache';
+import { anonimizarTextoJuridicoLgpd } from '@/lib/memoria-coletiva';
+import { gerarHashApiKey, gerarNovaApiKeyBruta } from '@/lib/tenant';
+import { gerarEspecificacaoOpenApi } from '@/lib/openapi-spec';
 import type { ComunicacaoCNJ } from '@/types/juridico';
 
 describe('Calendário Forense & Auto-Update (auto-update.ts)', () => {
@@ -325,5 +328,38 @@ describe('Roteador Multi-IA Gratuito com Ciclo & Failover (ia-router.ts)', () =>
 
     const resForte = await executarChamadaMultiIA({ prompt: 'Minuta', complexidade: 'FORTE' });
     expect(resForte?.modelo).toBe('llama-3.3-70b-versatile');
+  });
+});
+
+describe('Memória Coletiva LGPD (#78), Multi-Tenant API Keys (#79/#80) e OpenAPI (#80)', () => {
+  it('anonimiza CPF, CNPJ, número CNJ, e-mail e OAB antes de salvar na Memória Coletiva (#78)', () => {
+    const texto =
+      'Processo 5009926-95.2020.4.04.7201 do cliente CPF 123.456.789-00 e CNPJ 12.345.678/0001-99, advogado OAB/RS 54321, contato teste@banca.com.br.';
+    const anon = anonimizarTextoJuridicoLgpd(texto);
+    expect(anon).not.toContain('5009926-95.2020.4.04.7201');
+    expect(anon).not.toContain('123.456.789-00');
+    expect(anon).not.toContain('12.345.678/0001-99');
+    expect(anon).not.toContain('teste@banca.com.br');
+    expect(anon).not.toContain('54321');
+    expect(anon).toContain('[PROCESSO_OCULTO]');
+    expect(anon).toContain('[CPF_OCULTO]');
+    expect(anon).toContain('[CNPJ_OCULTO]');
+  });
+
+  it('gera API Key B2B com prefixo seguro e hash SHA-256 determinístico (#79/#80)', () => {
+    const { chaveBruta, prefixo, chaveHash } = gerarNovaApiKeyBruta();
+    expect(chaveBruta.startsWith('rk_live_')).toBe(true);
+    expect(prefixo).toBe(chaveBruta.slice(0, 16));
+    expect(chaveHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(gerarHashApiKey(chaveBruta)).toBe(chaveHash);
+  });
+
+  it('gera especificação OpenAPI 3.1 válida cobrindo os endpoints principais (#80)', () => {
+    const spec = gerarEspecificacaoOpenApi('https://api.radarjuridico.com.br');
+    expect(spec.openapi).toBe('3.1.0');
+    expect(spec.paths['/api/publicacoes']).toBeDefined();
+    expect(spec.paths['/api/ia/memoria-coletiva']).toBeDefined();
+    expect(spec.paths['/api/api-keys']).toBeDefined();
+    expect(Object.keys(spec.paths).length).toBeGreaterThanOrEqual(20);
   });
 });

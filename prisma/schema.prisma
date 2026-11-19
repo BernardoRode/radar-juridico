@@ -8,17 +8,21 @@ datasource db {
 }
 
 model ClienteMonitorado {
-  id           String   @id @default(cuid())
-  nome         String
-  variacoes    String?  // Variações de razão social separadas por vírgula
-  cnpjs        String?  // CNPJs separados por vírgula
-  ativo        Boolean  @default(true)
-  criadoEm     DateTime @default(now())
-  atualizadoEm DateTime @updatedAt
+  id            String   @id @default(cuid())
+  organizacaoId String?  // Issue #79: Isolamento Multi-Tenant
+  nome          String
+  variacoes     String?  // Variações de razão social separadas por vírgula
+  cnpjs         String?  // CNPJs separados por vírgula
+  ativo         Boolean  @default(true)
+  criadoEm      DateTime @default(now())
+  atualizadoEm  DateTime @updatedAt
+
+  @@index([organizacaoId])
 }
 
 model AdvogadoEscritorio {
   id                 String   @id @default(cuid())
+  organizacaoId      String?  // Issue #79: Isolamento Multi-Tenant
   nome               String
   numeroOab          String
   ufOab              String
@@ -29,10 +33,12 @@ model AdvogadoEscritorio {
   atualizadoEm       DateTime @updatedAt
 
   @@unique([numeroOab, ufOab])
+  @@index([organizacaoId])
 }
 
 model Processo {
   id                    String    @id @default(cuid())
+  organizacaoId         String?   // Issue #79: Isolamento Multi-Tenant
   numeroProcesso        String    @unique // 20 dígitos sem máscara
   numeroFormatado       String
   siglaTribunal         String
@@ -59,6 +65,8 @@ model Processo {
 
   publicacoes Publicacao[]
   documentos  DocumentoOriginal[]
+
+  @@index([organizacaoId])
 }
 
 model Publicacao {
@@ -102,6 +110,7 @@ model DocumentoOriginal {
 
 model ExecucaoRadar {
   id                     String    @id @default(cuid())
+  organizacaoId          String?   // Issue #79: Isolamento Multi-Tenant
   origem                 String    @default("MANUAL") // MANUAL | CRON
   clientesVarredura      Int       @default(0)
   oabsVarredura          Int       @default(0)
@@ -112,15 +121,20 @@ model ExecucaoRadar {
   detalhesJson           String?
   iniciadoEm             DateTime  @default(now())
   finalizadoEm           DateTime?
+
+  @@index([organizacaoId])
 }
 
 model WebhookAlerta {
-  id         String   @id @default(cuid())
-  nome       String
-  canal      String   @default("WEBHOOK") // WEBHOOK | WHATSAPP | PUSH | SLACK | EMAIL
-  urlDestino String
-  ativo      Boolean  @default(true)
-  criadoEm   DateTime @default(now())
+  id            String   @id @default(cuid())
+  organizacaoId String?  // Issue #79: Isolamento Multi-Tenant
+  nome          String
+  canal         String   @default("WEBHOOK") // WEBHOOK | WHATSAPP | PUSH | SLACK | EMAIL
+  urlDestino    String
+  ativo         Boolean  @default(true)
+  criadoEm      DateTime @default(now())
+
+  @@index([organizacaoId])
 }
 
 model LogEntregaWebhook {
@@ -157,12 +171,15 @@ model LogSaudeTribunal {
 
 model LinkCompartilhamento {
   id             String   @id @default(cuid())
+  organizacaoId  String?  // Issue #79: Isolamento Multi-Tenant
   token          String   @unique
   tipo           String   // CORRESPONDENTE_48H | PORTAL_CLIENTE
   escopo         String   // Número CNJ (20 dígitos) ou Nome do Cliente
   anonimizarLgpd Boolean  @default(false)
   expiraEm       DateTime
   criadoEm       DateTime @default(now())
+
+  @@index([organizacaoId])
 }
 
 model Organizacao {
@@ -202,4 +219,49 @@ model CacheAnaliseIA {
   expiraEm     DateTime
   criadoEm     DateTime @default(now())
   atualizadoEm DateTime @updatedAt
+}
+
+model PerfilColetivoVara {
+  id                String   @id @default(cuid())
+  chaveUnica        String   @unique // Issue #78: tribunal|orgaoJulgador|magistrado (100% anonimizado)
+  siglaTribunal     String
+  orgaoJulgador     String
+  magistrado        String?
+  totalAnalises     Int      @default(1)
+  totalCriticos     Int      @default(0)
+  totalBloqueios    Int      @default(0)
+  totalLiminares    Int      @default(0)
+  sumulasTemasJson  String?  // JSON array de súmulas/temas recorrentes nesta vara
+  ultimaAtualizacao DateTime @updatedAt
+  criadoEm          DateTime @default(now())
+}
+
+model ModeloMinutaValidada {
+  id                   String   @id @default(cuid())
+  tipoMinuta           String   // RESPOSTA_AUTOMATICA | IMPUGNACAO_SISBAJUD | NULIDADE_ART_272_CPC | HABILITACAO_URGENTE
+  siglaTribunal        String
+  tituloPeca           String
+  estruturaAnonimizada String   // Issue #78: Estrutura jurídica 100% anonimizada (sem nomes/CPFs)
+  aprovacoes           Int      @default(1)
+  criadoEm             DateTime @default(now())
+  atualizadoEm         DateTime @updatedAt
+
+  @@index([tipoMinuta, siglaTribunal])
+}
+
+model ApiKeyCliente {
+  id            String    @id @default(cuid())
+  organizacaoId String?   // Issue #79 + #80: Chave B2B vinculada à Organização
+  nome          String
+  prefixo       String    // Ex: rk_live_ab12cd34 (para exibição segura)
+  chaveHash     String    @unique // SHA-256 da chave bruta
+  plano         String    @default("FREE") // FREE | PRO | ENTERPRISE
+  limiteMensal  Int       @default(1000)
+  usoMesAtual   Int       @default(0)
+  mesReferencia String    // YYYY-MM
+  ativa         Boolean   @default(true)
+  ultimoUsoEm   DateTime?
+  criadoEm      DateTime  @default(now())
+
+  @@index([organizacaoId])
 }

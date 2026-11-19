@@ -46,6 +46,7 @@ export async function POST(request: NextRequest) {
       nome: usuario.nome,
       perfil: usuario.perfil as PerfilRbac,
       organizacao: usuario.organizacao?.nome || 'Escritório',
+      organizacaoId: usuario.organizacaoId || undefined,
     });
 
     const res = NextResponse.json({

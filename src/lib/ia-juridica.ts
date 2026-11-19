@@ -8,6 +8,11 @@ import {
   limparRuidoContextoJuridico,
   salvarCacheAnaliseIA,
 } from '@/lib/ia-cache';
+import {
+  buscarReferenciaMinutaAnonimizada,
+  obterContextoColetivoVara,
+  registrarAprendizadoColetivoVara,
+} from '@/lib/memoria-coletiva';
 
 export interface AnaliseIAJuridica {
   resumoExecutivo: string;
@@ -265,7 +270,11 @@ export async function analisarPublicacaoComIA(
     };
   }
 
-  const prompt = montarPromptJuridico({ ...params, texto: textoLimpo });
+  const contextoColetivo = await obterContextoColetivoVara(params.tribunal);
+  const promptBase = montarPromptJuridico({ ...params, texto: textoLimpo });
+  const prompt = contextoColetivo
+    ? `${promptBase}\n\n[MEMÓRIA COLETIVA ANONIMIZADA DO TRIBUNAL — USE COMO REFERÊNCIA COMPLEMENTAR]:\n${contextoColetivo}`
+    : promptBase;
 
   const resposta = await executarChamadaMultiIA({
     prompt,
@@ -312,11 +321,24 @@ export async function analisarPublicacaoComIA(
         ttlHoras: 168,
       });
 
+      // Issue #78: Alimenta a Memória Coletiva Anonimizada por Vara/Tribunal (LGPD)
+      await registrarAprendizadoColetivoVara({
+        siglaTribunal: params.tribunal,
+        textoOriginal: textoLimpo,
+        nivelRisco: resultadoFinal.nivelRisco,
+      });
+
       return resultadoFinal;
     }
   }
 
-  return analiseHeuristicaJuridica(params);
+  const heuristica = analiseHeuristicaJuridica(params);
+  await registrarAprendizadoColetivoVara({
+    siglaTribunal: params.tribunal,
+    textoOriginal: textoLimpo,
+    nivelRisco: heuristica.nivelRisco,
+  });
+  return heuristica;
 }
 
 export type TipoMinuta =
@@ -397,6 +419,12 @@ export async function gerarPreMinutaPeticao(
     };
   }
 
+  // Issue #78: Busca estrutura validada anonimizada (few-shot) da Biblioteca Viva
+  const referenciaBiblioteca = await buscarReferenciaMinutaAnonimizada(
+    params.tipoMinuta || 'RESPOSTA_AUTOMATICA',
+    params.tribunal || 'GERAL'
+  );
+
   // Tenta geração contextualizada via LLM real (modelo FORTE) com Context Pruning (#77)
   const promptMinuta = `Elabore uma pré-minuta jurídica formal em português brasileiro, pronta para revisão do advogado, seguindo rigorosamente o CPC/CLT aplicável.
 
@@ -413,6 +441,11 @@ ${textoPubLimpo}
 ${
   textoPdfLimpo
     ? `\nINTEIRO TEOR DO PDF ASSINADO EXTRAÍDO:\n${textoPdfLimpo}`
+    : ''
+}
+${
+  referenciaBiblioteca
+    ? `\nREFERÊNCIA DE ESTRUTURA VALIDADA ANONIMIZADA (USE APENAS COMO MODELO DE ESTILO/ESTRUTURA):\n${referenciaBiblioteca}`
     : ''
 }
 

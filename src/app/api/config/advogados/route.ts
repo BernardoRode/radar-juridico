@@ -1,9 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { resolverEscopoOrganizacao } from '@/lib/tenant';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
+    const escopo = await resolverEscopoOrganizacao(request);
+    if (escopo.erroQuota) return escopo.erroQuota;
+
     const advogados = await prisma.advogadoEscritorio.findMany({
+      where: escopo.filtroPrisma,
       orderBy: { criadoEm: 'desc' },
     });
     return NextResponse.json({ sucesso: true, advogados });
@@ -15,6 +20,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
+    const escopo = await resolverEscopoOrganizacao(request);
+    if (escopo.erroQuota) return escopo.erroQuota;
+
     const body = await request.json();
     const nome = String(body.nome || '').trim();
     const numeroOab = String(body.numeroOab || '').replace(/[^0-9]/g, '');
@@ -33,8 +41,21 @@ export async function POST(request: NextRequest) {
 
     const advogado = await prisma.advogadoEscritorio.upsert({
       where: { numeroOab_ufOab: { numeroOab, ufOab } },
-      create: { nome, numeroOab, ufOab, emFeriasAte, advogadoSubstituto },
-      update: { nome, ativo: true, emFeriasAte, advogadoSubstituto },
+      create: {
+        nome,
+        numeroOab,
+        ufOab,
+        emFeriasAte,
+        advogadoSubstituto,
+        organizacaoId: escopo.organizacaoId,
+      },
+      update: {
+        nome,
+        ativo: true,
+        emFeriasAte,
+        advogadoSubstituto,
+        ...(escopo.organizacaoId ? { organizacaoId: escopo.organizacaoId } : {}),
+      },
     });
     return NextResponse.json({ sucesso: true, advogado }, { status: 201 });
   } catch (error: unknown) {

@@ -43,6 +43,7 @@ export interface JwtPayload {
   nome: string;
   perfil: PerfilRbac;
   organizacao?: string;
+  organizacaoId?: string;
   iat: number;
   exp: number;
 }

@@ -1,17 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { resolverEscopoOrganizacao } from '@/lib/tenant';
 
 /**
  * GET /api/processos
  * Lista todas as pastas de processos persistidas automaticamente no banco de dados.
+ * Issue #79: Filtra automaticamente por `organizacaoId` quando autenticado.
  */
 export async function GET(request: NextRequest) {
   try {
+    const escopo = await resolverEscopoOrganizacao(request);
+    if (escopo.erroQuota) return escopo.erroQuota;
+
     const { searchParams } = new URL(request.url);
     const status = searchParams.get('status')?.trim();
     const incluirIgnorados = searchParams.get('incluirIgnorados') === 'true';
 
-    const where: Record<string, unknown> = {};
+    const where: Record<string, unknown> = { ...escopo.filtroPrisma };
     if (status) where.statusConcorrencia = status;
     if (!incluirIgnorados) where.ignoradoHomonimo = false;
 

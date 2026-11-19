@@ -426,7 +426,7 @@ As 65 issues originais do código local (#1 a #65) estão concluídas e fechadas
 - **Objetivo:** Criar tabela `CacheAnaliseIA` no Prisma indexada pelo SHA-256 do texto normalizado (evitando reanalisar despachos/publicações idênticos), limpar cabeçalhos/rodapés repetitivos do DJEN/PJe antes de enviar à LLM e rotear tarefas simples (JSON/resumo curto) para modelos leves (`flash-lite`, `8b`) vs. tarefas complexas (minutas/RAG) para modelos fortes (`flash`, `70b`).
 
 ### Issue #78: [Memória Coletiva & Auto-Alimentação] Base de Inteligência Jurídica Anonimizada entre Clientes (LGPD)
-- **Status:** 📋 Planejada (abrir no GitHub como #78)
+- **Status:** ✅ Concluído ([memoria-coletiva.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/memoria-coletiva.ts), `/api/ia/memoria-coletiva`, `PerfilColetivoVara` e `ModeloMinutaValidada` no Prisma) ([#78](https://github.com/BernardoRode/radar-juridico/issues/78))
 - **Prioridade:** P1 (Alta)
 - **Objetivo:** Criar camada de aprendizado coletivo 100% anonimizada (zero exposição de nomes, CPFs ou processos sigilosos entre clientes):
   - **Perfil Coletivo por Vara / Magistrado (`assinadoPor`):** registrar teses aceitas, súmulas citadas e taxa de liminares para enriquecer automaticamente as análises de outros clientes que caírem na mesma Vara;
@@ -434,12 +434,12 @@ As 65 issues originais do código local (#1 a #65) estão concluídas e fechadas
   - **Cache Compartilhado de Despachos-Padrão Públicos do DJEN:** reaproveitar interpretações de atos rotineiros de cartório sem gastar novos tokens.
 
 ### Issue #79: [Multi-Tenant SaaS] Isolamento Completo de Dados por `organizacaoId` nas Tabelas e Rotas da API
-- **Status:** 📋 Planejada (abrir no GitHub como #79)
+- **Status:** ✅ Concluído ([tenant.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/tenant.ts), `organizacaoId` nas tabelas operacionais do Prisma + escopo automático em `/api/processos`, `/api/config/clientes`, `/api/config/advogados` e `/api/api-keys`) ([#79](https://github.com/BernardoRode/radar-juridico/issues/79))
 - **Prioridade:** P0 (Obrigatória antes de vender para múltiplos escritórios no mesmo servidor)
 - **Objetivo:** Adicionar `organizacaoId` nas tabelas `ClienteMonitorado`, `AdvogadoEscritorio`, `Processo`, `WebhookAlerta`, `ExecucaoRadar` e `LinkCompartilhamento`, filtrando todas as queries/rotas `/api/*` pela organização do usuário autenticado (JWT/API Key) para garantir isolamento total entre clientes.
 
 ### Issue #80: [API B2B & OpenAPI] Documentação Interativa Swagger/OpenAPI (`/api/openapi.json` + `/docs`) e Gestão de API Keys por Cliente
-- **Status:** 📋 Planejada (abrir no GitHub como #80)
+- **Status:** ✅ Concluído ([openapi-spec.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/openapi-spec.ts), `/api/openapi.json`, página interativa `/docs`, tabela `ApiKeyCliente` e CRUD `/api/api-keys`) ([#80](https://github.com/BernardoRode/radar-juridico/issues/80))
 - **Prioridade:** P1 (Alta para comercialização B2B da API)
 - **Objetivo:** Expor especificação OpenAPI 3.1 cobrindo todas as 22 rotas REST + página interativa de testes (`/docs`), além de tabela `ApiKeyCliente` vinculada à `Organizacao` com planos, cota mensal de requisições e painel de consumo por cliente.
 

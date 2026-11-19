@@ -8,14 +8,32 @@ import React from 'react';
 export function PainelApiDocs() {
   return (
     <section className="bg-[#0f1628] border border-slate-800 rounded-2xl p-6 space-y-6">
-      <div>
-        <h2 className="text-base font-bold text-white">
-          Como consumir a sua própria API (Web, App Mobile, CRM ou n8n)
-        </h2>
-        <p className="text-xs text-slate-400 mt-1">
-          Endpoints REST prontos para captura DJEN/CNJ, Datajud, extração de PDFs PJe/eproc,
-          Pool Multi-IA, Portal do Cliente e Autenticação JWT/Cookie.
-        </p>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-bold text-white">
+            Como consumir a sua própria API (Web, App Mobile, CRM ou n8n)
+          </h2>
+          <p className="text-xs text-slate-400 mt-1">
+            Endpoints REST prontos para captura DJEN/CNJ, Datajud, extração de PDFs PJe/eproc,
+            Pool Multi-IA, Memória Coletiva, Portal do Cliente, API Keys B2B e Autenticação JWT/Cookie.
+          </p>
+        </div>
+        <div className="flex items-center gap-2 text-xs">
+          <a
+            href="/docs"
+            className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold"
+          >
+            Abrir Explorer OpenAPI (/docs) →
+          </a>
+          <a
+            href="/api/openapi.json"
+            target="_blank"
+            rel="noreferrer"
+            className="px-3 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700 text-indigo-300 font-mono"
+          >
+            openapi.json
+          </a>
+        </div>
       </div>
 
       <div className="space-y-4">

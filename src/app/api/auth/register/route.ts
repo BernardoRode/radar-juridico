@@ -112,6 +112,7 @@ export async function POST(request: NextRequest) {
       nome: usuario.nome,
       perfil: perfilFinal,
       organizacao: org.nome,
+      organizacaoId: org.id,
     });
 
     const res = NextResponse.json({
