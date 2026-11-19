@@ -164,3 +164,29 @@ model LinkCompartilhamento {
   expiraEm       DateTime
   criadoEm       DateTime @default(now())
 }
+
+model Organizacao {
+  id           String    @id @default(cuid())
+  nome         String
+  slug         String    @unique
+  cnpj         String?
+  plano        String    @default("FREE") // FREE | PRO | ENTERPRISE
+  ativa        Boolean   @default(true)
+  criadoEm     DateTime  @default(now())
+  atualizadoEm DateTime  @updatedAt
+  usuarios     Usuario[]
+}
+
+model Usuario {
+  id            String       @id @default(cuid())
+  nome          String
+  email         String       @unique
+  senhaHash     String
+  perfil        String       @default("ADVOGADO") // ADMIN | SOCIO | CONTROLADORIA | ADVOGADO | ESTAGIARIO
+  ativo         Boolean      @default(true)
+  organizacaoId String?
+  organizacao   Organizacao? @relation(fields: [organizacaoId], references: [id], onDelete: SetNull)
+  ultimoLoginEm DateTime?
+  criadoEm      DateTime     @default(now())
+  atualizadoEm  DateTime     @updatedAt
+}

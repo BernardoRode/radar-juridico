@@ -23,7 +23,12 @@ import {
   validarUrlTribunalPermitida,
 } from '@/lib/seguranca';
 import { resolverIndiceDatajud } from '@/lib/datajud';
-import { assinarJwt, verificarJwt } from '@/lib/auth-jwt';
+import {
+  assinarJwt,
+  gerarHashSenha,
+  verificarJwt,
+  verificarSenha,
+} from '@/lib/auth-jwt';
 import {
   executarChamadaMultiIA,
   montarPoolSlotsIA,
@@ -167,6 +172,15 @@ describe('Segurança Anti-SSRF, Datajud & JWT RBAC', () => {
     expect(payload?.perfil).toBe('SOCIO');
     expect(payload?.organizacao).toBe('Banca Teste');
     expect(verificarJwt(`${token}adulterado`)).toBeNull();
+  });
+
+  it('gera hash scrypt seguro com salt aleatório e valida senha corretamente (Issue #69)', () => {
+    const h1 = gerarHashSenha('MinhaSenhaForte@2026');
+    const h2 = gerarHashSenha('MinhaSenhaForte@2026');
+    expect(h1).toMatch(/^scrypt\$[0-9a-f]+\$[0-9a-f]+$/);
+    expect(h1).not.toBe(h2); // Salt aleatório
+    expect(verificarSenha('MinhaSenhaForte@2026', h1)).toBe(true);
+    expect(verificarSenha('SenhaErrada', h1)).toBe(false);
   });
 });
 

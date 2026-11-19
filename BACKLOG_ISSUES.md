@@ -375,8 +375,8 @@ As 65 issues originais do código local (#1 a #65) estão concluídas e fechadas
 - **Objetivo:** Conectar o repositório na Vercel, configurar todas as variáveis do `.env.example` e ativar os crons reais (`/api/cron/radar` a cada 4h e `/api/digest?disparar=true` às 08h BRT).
 
 ### Issue #69: [Segurança & Login] Criar Tabelas `Usuario`/`Organizacao`, Tela de Login e Ativar `ENFORCE_AUTH`
-- **Status:** 📋 Aberta no GitHub ([#69](https://github.com/BernardoRode/radar-juridico/issues/69))
-- **Prioridade:** P0 (Crítica antes de abrir URL pública)
+- **Status:** ✅ Concluído no código (`Organizacao`/`Usuario` no Prisma, `/api/auth/register|login|logout|me`, `/login`, `src/middleware.ts` Edge + scrypt + cookie `HttpOnly`). Em produção basta definir segredos fortes e `ENFORCE_AUTH="true"`. ([#69](https://github.com/BernardoRode/radar-juridico/issues/69))
+- **Prioridade:** P0 (Pronto para ativar `ENFORCE_AUTH="true"` ao publicar)
 - **Objetivo:** Gerar segredos criptográficos reais (`JWT_SECRET`, `CRON_SECRET`, `WEBHOOK_HMAC_SECRET`, `API_ACCESS_KEY`), adicionar login real com cookie `HttpOnly`, middleware e ativar `ENFORCE_AUTH="true"`.
 
 ### Issue #70: [Notificações Externas] Configurar Canal Real de Alertas (WhatsApp / Slack / E-mail Resend)
@@ -395,9 +395,9 @@ As 65 issues originais do código local (#1 a #65) estão concluídas e fechadas
 - **Objetivo:** Popular OABs reais (`AdvogadoEscritorio`) e clientes/variações/CNPJs (`ClienteMonitorado`), disparar primeira varredura real e validar `GET /api/config/status` (`prontoParaUsoLocal: true`).
 
 ### Issue #73: [UI / Operação] Conectar na Interface Campos de Férias OAB, Logs de Webhook e Gerador de Portal do Cliente
-- **Status:** 📋 Aberta no GitHub ([#73](https://github.com/BernardoRode/radar-juridico/issues/73))
+- **Status:** ✅ Concluído ([PainelConfiguracoes.tsx](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/components/PainelConfiguracoes.tsx) + [PwaEStatusBanner.tsx](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/components/PwaEStatusBanner.tsx)) ([#73](https://github.com/BernardoRode/radar-juridico/issues/73))
 - **Prioridade:** P1 (Alta)
-- **Objetivo:** Expor visualmente na aba Configurações os endpoints já prontos (`PATCH /api/config/advogados`, `GET /api/webhooks?logs=true`, `POST /api/compartilhar` para Portal do Cliente e badges de modo IA).
+- **Objetivo:** Expor visualmente na aba Configurações os endpoints já prontos (`PATCH /api/config/advogados`, `GET /api/webhooks?logs=true`, `POST /api/compartilhar` para Portal do Cliente e badges/diagnóstico do Pool Multi-IA).
 
 ### Issue #74: [Escala Produção] Rate Limiting Distribuído (Upstash Redis) e Busca Semântica Vetorial (`pgvector`)
 - **Status:** 📋 Aberta no GitHub ([#74](https://github.com/BernardoRode/radar-juridico/issues/74))
@@ -405,7 +405,7 @@ As 65 issues originais do código local (#1 a #65) estão concluídas e fechadas
 - **Objetivo:** Migrar `src/lib/rate-limit.ts` para Upstash Redis e ativar `pgvector` no PostgreSQL para embeddings vetoriais no RAG.
 
 ### Issue #75: [Refatoração Frontend] Modularizar `src/app/page.tsx` (~140 KB) em Componentes em `src/components/`
-- **Status:** 📋 Aberta no GitHub ([#75](https://github.com/BernardoRode/radar-juridico/issues/75))
+- **Status:** ✅ Concluído (extraídos `PainelCockpitKanban`, `PainelBiJurimetria`, `PainelFeedPublicacoes`, `PainelConfiguracoes` e `PainelApiDocs` para `src/components/`) ([#75](https://github.com/BernardoRode/radar-juridico/issues/75))
 - **Prioridade:** P2 (Média)
 - **Objetivo:** Quebrar `src/app/page.tsx` em componentes modulares mantendo 100% das funcionalidades, atalhos de teclado e CI verde.
 

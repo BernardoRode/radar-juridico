@@ -1,8 +1,33 @@
 import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 
+export const COOKIE_SESSAO_RADAR = 'radar_session';
+
 const JWT_SECRET =
   process.env.JWT_SECRET || 'radar-juridico-dev-secret-alterar-em-producao';
+
+/**
+ * Issue #69: Hash seguro de senha usando scrypt nativo do Node.js com salt aleatório.
+ */
+export function gerarHashSenha(senha: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const derivado = crypto.scryptSync(senha, salt, 64).toString('hex');
+  return `scrypt$${salt}$${derivado}`;
+}
+
+export function verificarSenha(senha: string, hashArmazenado: string): boolean {
+  try {
+    const partes = hashArmazenado.split('$');
+    if (partes.length !== 3 || partes[0] !== 'scrypt') return false;
+    const [, salt, hashHex] = partes;
+    const derivado = crypto.scryptSync(senha, salt, 64);
+    const esperado = Buffer.from(hashHex, 'hex');
+    if (derivado.length !== esperado.length) return false;
+    return crypto.timingSafeEqual(derivado, esperado);
+  } catch {
+    return false;
+  }
+}
 
 export type PerfilRbac =
   | 'ADMIN'
@@ -90,8 +115,15 @@ export function verificarJwt(token: string): JwtPayload | null {
 
 export function extrairUsuarioJwt(request: NextRequest): JwtPayload | null {
   const auth = request.headers.get('authorization');
-  if (!auth || !auth.startsWith('Bearer ')) return null;
-  return verificarJwt(auth.slice(7).trim());
+  if (auth && auth.startsWith('Bearer ')) {
+    const viaHeader = verificarJwt(auth.slice(7).trim());
+    if (viaHeader) return viaHeader;
+  }
+  const cookieToken = request.cookies.get(COOKIE_SESSAO_RADAR)?.value?.trim();
+  if (cookieToken) {
+    return verificarJwt(cookieToken);
+  }
+  return null;
 }
 
 /**

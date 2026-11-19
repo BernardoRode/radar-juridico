@@ -29,7 +29,14 @@ import {
   ResultadoExtracaoDocumento,
 } from '@/types/juridico';
 import type { AnaliseIAJuridica } from '@/lib/ia-juridica';
-import { gerarRelatorioBIJuridico } from '@/lib/analytics-juridico';
+import { PainelCockpitKanban } from '@/components/PainelCockpitKanban';
+import { PainelBiJurimetria } from '@/components/PainelBiJurimetria';
+import { PainelFeedPublicacoes } from '@/components/PainelFeedPublicacoes';
+import {
+  PainelConfiguracoes,
+  type AdvogadoDbItem,
+} from '@/components/PainelConfiguracoes';
+import { PainelApiDocs } from '@/components/PainelApiDocs';
 
 type ModoBusca = 'RADAR_CLIENTE' | 'OAB_ADVOGADO' | 'PROCESSO_DIRETO' | 'INSPETOR_LINKS';
 type AbaVisualizacao =
@@ -178,9 +185,7 @@ export default function RadarJuridicoHome() {
   const [clientesDb, setClientesDb] = useState<
     Array<{ id: string; nome: string; variacoes?: string; cnpjs?: string }>
   >([]);
-  const [advogadosDb, setAdvogadosDb] = useState<
-    Array<{ id: string; nome: string; numeroOab: string; ufOab: string }>
-  >([]);
+  const [advogadosDb, setAdvogadosDb] = useState<AdvogadoDbItem[]>([]);
   const [processosDb, setProcessosDb] = useState<
     Array<{
       id: string;
@@ -1973,798 +1978,79 @@ export default function RadarJuridicoHome() {
           </section>
         )}
 
-        {/* CONTEÚDO DA ABA: COCKPIT KANBAN DE PRAZOS (ISSUE #13 + #42) */}
+        {/* CONTEÚDO DA ABA: COCKPIT KANBAN DE PRAZOS (ISSUE #13 + #42 + #75) */}
         {abaAtiva === 'COCKPIT_KANBAN' && (
-          <section className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              {
-                titulo: '🔥 Críticos & Citações (Res. 455)',
-                cor: 'border-rose-500/40',
-                itens: processos.filter(
-                  (p) =>
-                    !processosConcluidos[p.numeroProcesso] &&
-                    (p.urgenciaMaxima === 'ALTA' ||
-                      p.statusConcorrencia === 'SEM_ADVOGADO_CADASTRADO')
-                ),
-              },
-              {
-                titulo: '⏳ Prazos em Curso (Revisão D-2)',
-                cor: 'border-amber-500/40',
-                itens: processos.filter(
-                  (p) =>
-                    !processosConcluidos[p.numeroProcesso] &&
-                    p.urgenciaMaxima !== 'ALTA' &&
-                    p.statusConcorrencia === 'NOSSO_ESCRITORIO'
-                ),
-              },
-              {
-                titulo: '🕵️ Concorrência em Auditoria',
-                cor: 'border-purple-500/40',
-                itens: processos.filter(
-                  (p) =>
-                    !processosConcluidos[p.numeroProcesso] &&
-                    p.urgenciaMaxima !== 'ALTA' &&
-                    p.statusConcorrencia === 'ESCRITORIO_CONCORRENTE'
-                ),
-              },
-              {
-                titulo: '✅ Conferidos / Protocolados',
-                cor: 'border-emerald-500/40',
-                itens: processos.filter((p) => !!processosConcluidos[p.numeroProcesso]),
-              },
-            ].map((col, idx) => (
-              <div
-                key={idx}
-                className={`bg-[#0f1628] border ${col.cor} rounded-2xl p-4 space-y-3`}
-              >
-                <div className="flex items-center justify-between border-b border-slate-800 pb-2">
-                  <h3 className="text-xs font-bold text-white">{col.titulo}</h3>
-                  <span className="px-2 py-0.5 rounded-full bg-slate-900 text-slate-300 text-[11px] font-bold">
-                    {col.itens.length}
-                  </span>
-                </div>
-                <div className="space-y-2.5 max-h-[560px] overflow-y-auto">
-                  {col.itens.length === 0 ? (
-                    <p className="text-xs text-slate-500 py-4 text-center">
-                      Nenhum processo nesta coluna.
-                    </p>
-                  ) : (
-                    col.itens.map((proc) => (
-                      <div
-                        key={proc.numeroProcesso}
-                        className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2 text-xs"
-                      >
-                        <div className="flex items-center justify-between">
-                          <span className="px-1.5 py-0.5 rounded bg-slate-800 text-indigo-300 font-bold text-[10px]">
-                            {proc.siglaTribunal}
-                          </span>
-                          {typeof proc.scoreOportunidade === 'number' && (
-                            <span className="text-[10px] font-mono text-cyan-300 font-bold">
-                              Score {proc.scoreOportunidade}
-                            </span>
-                          )}
-                        </div>
-                        <p
-                          onClick={() => {
-                            setProcessoSelecionado(proc);
-                            setAbaAtiva('PROCESSOS_AUTO');
-                          }}
-                          className="font-mono font-bold text-white hover:text-indigo-400 cursor-pointer"
-                        >
-                          {proc.numeroFormatado}
-                        </p>
-                        <p className="text-[11px] text-slate-300">{proc.ultimoStatusDetectado}</p>
-                        {proc.prazoFatal && (
-                          <p className="text-[11px] text-rose-300 font-mono">
-                            Fatal: {proc.prazoFatal} (D-2: {proc.prazoInternoD2})
-                          </p>
-                        )}
-                        <div className="pt-1 flex justify-end">
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setProcessosConcluidos((prev) => ({
-                                ...prev,
-                                [proc.numeroProcesso]: !prev[proc.numeroProcesso],
-                              }))
-                            }
-                            className="px-2.5 py-1 rounded bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-emerald-300 text-[10px] font-semibold cursor-pointer"
-                          >
-                            {processosConcluidos[proc.numeroProcesso]
-                              ? 'Reabrir Prazo'
-                              : '✓ Marcar Protocolado'}
-                          </button>
-                        </div>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            ))}
-          </section>
+          <PainelCockpitKanban
+            processos={processos}
+            processosConcluidos={processosConcluidos}
+            onAbrirProcesso={(proc) => {
+              setProcessoSelecionado(proc);
+              setAbaAtiva('PROCESSOS_AUTO');
+            }}
+            onAlternarConcluido={(numProc) => marcarPrazoBaixadoNoBanco(numProc)}
+          />
         )}
 
-        {/* CONTEÚDO DA ABA: BI & JURIMETRIA (#12, #16, #17, #18, #19, #20, #24, #45, #55) */}
-        {abaAtiva === 'BI_JURIMETRIA' && (() => {
-          const bi = gerarRelatorioBIJuridico(processos);
-          return (
-            <section className="space-y-6">
-              {/* Linha 1: Provisionamento Financeiro & Benchmark SLA */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                      💰 Provisionamento Financeiro &amp; Contingência (#24 / #45)
-                    </h2>
-                    <span className="text-lg font-bold font-mono text-emerald-400">
-                      {bi.passivoFormatado}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-3 gap-3 text-xs">
-                    <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/30">
-                      <span className="text-[10px] text-rose-300 uppercase block">
-                        Risco Provável (Alta Urgência)
-                      </span>
-                      <span className="text-sm font-bold font-mono text-white">
-                        {bi.contingenciaPorRisco.provavelRS.toLocaleString('pt-BR', {
-                          style: 'currency',
-                          currency: 'BRL',
-                        })}
-                      </span>
-                    </div>
-                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30">
-                      <span className="text-[10px] text-amber-300 uppercase block">
-                        Risco Possível (Média)
-                      </span>
-                      <span className="text-sm font-bold font-mono text-white">
-                        {bi.contingenciaPorRisco.possivelRS.toLocaleString('pt-BR', {
-                          style: 'currency',
-                          currency: 'BRL',
-                        })}
-                      </span>
-                    </div>
-                    <div className="p-3 rounded-xl bg-slate-900 border border-slate-800">
-                      <span className="text-[10px] text-slate-400 uppercase block">
-                        Risco Remoto (Normal)
-                      </span>
-                      <span className="text-sm font-bold font-mono text-white">
-                        {bi.contingenciaPorRisco.remotoRS.toLocaleString('pt-BR', {
-                          style: 'currency',
-                          currency: 'BRL',
-                        })}
-                      </span>
-                    </div>
-                  </div>
-                </div>
+        {/* CONTEÚDO DA ABA: BI & JURIMETRIA (ISSUE #75) */}
+        {abaAtiva === 'BI_JURIMETRIA' && (
+          <PainelBiJurimetria
+            processos={processos}
+            perguntaRag={perguntaRag}
+            setPerguntaRag={setPerguntaRag}
+            respostaRag={respostaRag}
+            consultandoRag={consultandoRag}
+            onConsultarChatRag={consultarChatRag}
+          />
+        )}
 
-                <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-4">
-                  <h2 className="text-sm font-bold text-white">
-                    📊 Benchmark &amp; Auditoria de SLA — Nosso Escritório vs. Terceirizados (#19 / #55)
-                  </h2>
-                  <div className="grid grid-cols-3 gap-3 text-xs">
-                    <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/30">
-                      <span className="text-[10px] text-emerald-300 uppercase block">
-                        Nosso Escritório
-                      </span>
-                      <p className="text-lg font-bold text-white">
-                        {bi.benchmarkConcorrencia.nossoEscritorio.processos} proc.
-                      </p>
-                      <span className="text-[10px] text-slate-400">
-                        {bi.benchmarkConcorrencia.nossoEscritorio.incidentesCriticos} críticos
-                      </span>
-                    </div>
-                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/30">
-                      <span className="text-[10px] text-amber-300 uppercase block">
-                        Concorrência / Terceiros
-                      </span>
-                      <p className="text-lg font-bold text-amber-300">
-                        {bi.benchmarkConcorrencia.concorrencia.processos} proc.
-                      </p>
-                      <span className="text-[10px] text-rose-300 font-semibold">
-                        {bi.benchmarkConcorrencia.concorrencia.incidentesCriticos} incidentes/bloqueios
-                      </span>
-                    </div>
-                    <div className="p-3 rounded-xl bg-purple-500/10 border border-purple-500/30">
-                      <span className="text-[10px] text-purple-300 uppercase block">
-                        Sem Advogado (Novos)
-                      </span>
-                      <p className="text-lg font-bold text-purple-300">
-                        {bi.benchmarkConcorrencia.semAdvogado.processos} proc.
-                      </p>
-                      <span className="text-[10px] text-slate-400">
-                        Abordagem imediata
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Linha 2: Mapa de Calor (#18), Jurimetria Varas (#12) e Ofensores/Bancas (#16) */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 text-xs">
-                <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-3">
-                  <h3 className="font-bold text-white">
-                    🗺️ Mapa de Calor por Tribunal / UF (#18)
-                  </h3>
-                  {bi.distribuicaoPorTribunal.length === 0 ? (
-                    <p className="text-slate-500">Dispare uma busca para visualizar o mapa.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {bi.distribuicaoPorTribunal.map((t, i) => (
-                        <div
-                          key={i}
-                          className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950 border border-slate-800"
-                        >
-                          <span className="font-bold text-indigo-300">{t.tribunal}</span>
-                          <span>
-                            <strong>{t.totalProcessos}</strong> proc. ({t.urgenciaAlta} urgentes)
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-3">
-                  <h3 className="font-bold text-white">
-                    ⚖️ Jurimetria por Vara / Órgão Julgador (#12)
-                  </h3>
-                  {bi.topOrgaosJulgadores.length === 0 ? (
-                    <p className="text-slate-500">Sem órgãos julgadores analisados ainda.</p>
-                  ) : (
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
-                      {bi.topOrgaosJulgadores.map((o, i) => (
-                        <div
-                          key={i}
-                          className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 space-y-0.5"
-                        >
-                          <p className="font-semibold text-white truncate">{o.orgao}</p>
-                          <p className="text-[11px] text-slate-400">
-                            {o.processos} proc. • Fase predominante: {o.fasePredominante}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-
-                <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-3">
-                  <h3 className="font-bold text-white">
-                    🚨 Autores Contumazes &amp; Advogados Externos (#16)
-                  </h3>
-                  {bi.autoresOuAdvogadosRecorrentes.length === 0 ? (
-                    <p className="text-slate-500">Nenhum ofensor/banca listado ainda.</p>
-                  ) : (
-                    <div className="space-y-2 max-h-60 overflow-y-auto">
-                      {bi.autoresOuAdvogadosRecorrentes.map((item, i) => (
-                        <div
-                          key={i}
-                          className="flex items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-950 border border-slate-800"
-                        >
-                          <span className="truncate text-slate-200">{item.nome}</span>
-                          <span className="px-2 py-0.5 rounded bg-amber-500/15 text-amber-300 font-mono text-[10px] shrink-0">
-                            {item.quantidadeProcessos}x
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Chat Semântico / RAG com a Base do Escritório (Issue #27) */}
-              <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-3 text-xs">
-                <h3 className="font-bold text-white flex items-center gap-2">
-                  🧠 Busca Semântica / Chat RAG com Todos os Processos e PDFs do Banco (#27)
-                </h3>
-                <form onSubmit={consultarChatRag} className="flex flex-col sm:flex-row gap-2">
-                  <input
-                    type="text"
-                    value={perguntaRag}
-                    onChange={(e) => setPerguntaRag(e.target.value)}
-                    placeholder="Ex: Quais processos têm bloqueio Sisbajud, intimação ou sentença no TRT4?"
-                    className="flex-1 px-3.5 py-2 rounded-xl bg-slate-950 border border-slate-800 text-white"
-                  />
-                  <button
-                    type="submit"
-                    disabled={consultandoRag}
-                    className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold cursor-pointer"
-                  >
-                    {consultandoRag ? 'Pesquisando Base...' : 'Perguntar à Base'}
-                  </button>
-                </form>
-                {respostaRag && (
-                  <pre className="whitespace-pre-wrap font-sans text-slate-200 bg-slate-950 p-4 rounded-xl border border-slate-800">
-                    {respostaRag}
-                  </pre>
-                )}
-              </div>
-            </section>
-          );
-        })()}
-
-        {/* CONTEÚDO DA ABA 2: FEED DE PUBLICAÇÕES */}
+        {/* CONTEÚDO DA ABA: FEED DE PUBLICAÇÕES (ISSUE #75) */}
         {abaAtiva === 'FEED_PUBLICACOES' && (
-          <section className="space-y-4">
-            {publicacoes.map((pub) => (
-              <div
-                key={pub.id}
-                className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-3"
-              >
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-1 rounded bg-indigo-600/20 text-indigo-300 font-bold text-xs">
-                      {pub.siglaTribunal}
-                    </span>
-                    <span className="font-mono text-sm font-bold text-white">
-                      {pub.numeroprocessocommascara || pub.numero_processo}
-                    </span>
-                    <span className="text-xs text-slate-400">• {pub.nomeOrgao}</span>
-                  </div>
-                  <span className="text-xs text-slate-400">
-                    Data: {pub.data_disponibilizacao}
-                  </span>
-                </div>
-
-                <p className="text-xs text-slate-300 leading-relaxed whitespace-pre-wrap bg-slate-950 p-4 rounded-xl border border-slate-800/80">
-                  {pub.texto}
-                </p>
-              </div>
-            ))}
-          </section>
+          <PainelFeedPublicacoes publicacoes={publicacoes} />
         )}
 
-        {/* CONTEÚDO DA ABA: BANCO & CONFIGURAÇÕES (ISSUE #5) */}
+        {/* CONTEÚDO DA ABA: BANCO & CONFIGURAÇÕES (ISSUE #5 + #73 + #75) */}
         {abaAtiva === 'BANCO_CONFIG' && (
-          <section className="space-y-6">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Advogados do Nosso Escritório */}
-              <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-4">
-                <div>
-                  <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Users className="w-4 h-4 text-emerald-400" />
-                    OABs do Nosso Escritório (Salvas no SQLite)
-                  </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Toda busca na API cruza automaticamente com estas OABs para detectar processos do escritório vs. concorrência.
-                  </p>
-                </div>
-
-                <form onSubmit={adicionarAdvogadoDb} className="grid grid-cols-12 gap-2">
-                  <input
-                    type="text"
-                    value={novoAdvNome}
-                    onChange={(e) => setNovoAdvNome(e.target.value)}
-                    placeholder="Nome do advogado"
-                    className="col-span-5 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white"
-                  />
-                  <input
-                    type="text"
-                    value={novoAdvOab}
-                    onChange={(e) => setNovoAdvOab(e.target.value)}
-                    placeholder="Nº OAB"
-                    className="col-span-3 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white"
-                  />
-                  <input
-                    type="text"
-                    maxLength={2}
-                    value={novoAdvUf}
-                    onChange={(e) => setNovoAdvUf(e.target.value.toUpperCase())}
-                    placeholder="UF"
-                    className="col-span-2 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white uppercase"
-                  />
-                  <button
-                    type="submit"
-                    className="col-span-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold flex items-center justify-center cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </form>
-
-                <div className="space-y-2 max-h-52 overflow-y-auto">
-                  {advogadosDb.length === 0 ? (
-                    <p className="text-xs text-slate-500">Nenhuma OAB cadastrada ainda.</p>
-                  ) : (
-                    advogadosDb.map((adv) => (
-                      <div
-                        key={adv.id}
-                        className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs"
-                      >
-                        <div>
-                          <span className="text-white font-medium">{adv.nome}</span>
-                          <span className="ml-2 font-mono text-emerald-400">
-                            OAB/{adv.ufOab} {adv.numeroOab}
-                          </span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removerAdvogadoDb(adv.id)}
-                          className="text-slate-500 hover:text-rose-400 cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              {/* Clientes Monitorados */}
-              <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-4">
-                <div>
-                  <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-indigo-400" />
-                    Clientes Monitorados (Radar Corporativo)
-                  </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Empresas salvas para monitoramento contínuo (ex: LG ELECTRONICS).
-                  </p>
-                </div>
-
-                <form onSubmit={adicionarClienteDb} className="grid grid-cols-12 gap-2">
-                  <input
-                    type="text"
-                    value={novoClienteNome}
-                    onChange={(e) => setNovoClienteNome(e.target.value)}
-                    placeholder="Razão Social / Nome (ex: LG ELECTRONICS)"
-                    className="col-span-6 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white"
-                  />
-                  <input
-                    type="text"
-                    value={novoClienteCnpj}
-                    onChange={(e) => setNovoClienteCnpj(e.target.value)}
-                    placeholder="CNPJ (opcional)"
-                    className="col-span-4 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white"
-                  />
-                  <button
-                    type="submit"
-                    className="col-span-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold flex items-center justify-center cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </form>
-
-                <div className="space-y-2 max-h-52 overflow-y-auto">
-                  {clientesDb.length === 0 ? (
-                    <p className="text-xs text-slate-500">Nenhum cliente cadastrado ainda.</p>
-                  ) : (
-                    clientesDb.map((cli) => (
-                      <div
-                        key={cli.id}
-                        className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs"
-                      >
-                        <div>
-                          <span className="text-white font-medium">{cli.nome}</span>
-                          {cli.cnpjs && (
-                            <span className="ml-2 font-mono text-slate-400">{cli.cnpjs}</span>
-                          )}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removerClienteDb(cli.id)}
-                          className="text-slate-500 hover:text-rose-400 cursor-pointer"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Worker / Cron Radar 24/7 (Issue #7) */}
-            <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-amber-400" />
-                    Radar 24/7 — Varredura Automática (Worker / Cron)
-                  </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Varre todos os Clientes Monitorados e OABs salvas via <code className="text-amber-300">GET/POST /api/cron/radar</code> (agendado a cada 4h no <code className="text-amber-300">vercel.json</code>).
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  disabled={rodandoCron}
-                  onClick={dispararVarreduraRadar}
-                  className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 disabled:opacity-50 text-slate-950 font-semibold text-xs flex items-center gap-2 transition cursor-pointer"
-                >
-                  {rodandoCron ? (
-                    <>
-                      <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                      Varrendo Tribunais...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="w-3.5 h-3.5" />
-                      Disparar Varredura Agora
-                    </>
-                  )}
-                </button>
-              </div>
-
-              {execucoesRadar.length > 0 && (
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {execucoesRadar.map((ex) => (
-                    <div
-                      key={ex.id}
-                      className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs"
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className="px-2 py-0.5 rounded bg-slate-800 text-amber-300 font-mono text-[10px]">
-                          {ex.origem}
-                        </span>
-                        <span className="text-emerald-400 font-semibold">{ex.status}</span>
-                        <span className="text-slate-300">
-                          {ex.clientesVarredura} clientes • {ex.oabsVarredura} OABs →{' '}
-                          <strong>{ex.publicacoesEncontradas}</strong> pub. /{' '}
-                          <strong>{ex.processosSalvos}</strong> proc.
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        {ex.alertasAlta > 0 && (
-                          <span className="px-2 py-0.5 rounded bg-rose-500/20 text-rose-300 text-[10px] font-bold">
-                            {ex.alertasAlta} alta urgência
-                          </span>
-                        )}
-                        <span className="text-slate-500 font-mono text-[11px]">
-                          {new Date(ex.iniciadoEm).toLocaleString('pt-BR')}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Webhooks & App Mobile JWT (Issue #9) */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-4">
-                <div>
-                  <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                    <ShieldAlert className="w-4 h-4 text-rose-400" />
-                    Webhooks de Alerta Imediato (WhatsApp / Push / Slack)
-                  </h2>
-                  <p className="text-xs text-slate-400 mt-0.5">
-                    Disparados automaticamente sempre que surgir uma publicação de urgência <strong>ALTA</strong>.
-                  </p>
-                </div>
-
-                <form onSubmit={adicionarWebhookDb} className="grid grid-cols-12 gap-2">
-                  <input
-                    type="text"
-                    value={novoWebhookNome}
-                    onChange={(e) => setNovoWebhookNome(e.target.value)}
-                    placeholder="Nome (ex: WhatsApp Sócio)"
-                    className="col-span-4 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white"
-                  />
-                  <select
-                    value={novoWebhookCanal}
-                    onChange={(e) => setNovoWebhookCanal(e.target.value)}
-                    className="col-span-3 px-2 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white"
-                  >
-                    <option value="WHATSAPP">WhatsApp</option>
-                    <option value="PUSH">Push Mobile</option>
-                    <option value="SLACK">Slack</option>
-                    <option value="WEBHOOK">HTTP POST</option>
-                  </select>
-                  <input
-                    type="url"
-                    value={novoWebhookUrl}
-                    onChange={(e) => setNovoWebhookUrl(e.target.value)}
-                    placeholder="https://..."
-                    className="col-span-3 px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-xs text-white"
-                  />
-                  <button
-                    type="submit"
-                    className="col-span-2 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold flex items-center justify-center cursor-pointer"
-                  >
-                    <Plus className="w-4 h-4" />
-                  </button>
-                </form>
-
-                <div className="space-y-2 max-h-40 overflow-y-auto">
-                  {webhooksDb.length === 0 ? (
-                    <p className="text-xs text-slate-500">Nenhum webhook cadastrado.</p>
-                  ) : (
-                    webhooksDb.map((wh) => (
-                      <div
-                        key={wh.id}
-                        className="flex items-center justify-between p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-xs"
-                      >
-                        <div className="truncate pr-2">
-                          <span className="px-1.5 py-0.5 rounded bg-rose-500/20 text-rose-300 font-mono text-[10px] mr-2">
-                            {wh.canal}
-                          </span>
-                          <span className="text-white font-medium">{wh.nome}</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removerWebhookDb(wh.id)}
-                          className="text-slate-500 hover:text-rose-400 cursor-pointer shrink-0"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
-
-              <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-4">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                      <Code2 className="w-4 h-4 text-indigo-400" />
-                      Autenticação JWT para App Mobile
-                    </h2>
-                    <p className="text-xs text-slate-400 mt-0.5">
-                      Gere um token Bearer HS256 via <code className="text-indigo-300">POST /api/auth/token</code>.
-                    </p>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={gerarTokenMobileJwt}
-                    className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold cursor-pointer shrink-0"
-                  >
-                    Gerar JWT
-                  </button>
-                </div>
-
-                {tokenJwtGerado && (
-                  <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-emerald-400 break-all">
-                    Authorization: Bearer {tokenJwtGerado}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Processos Persistidos no Banco */}
-            <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 className="text-sm font-bold text-white flex items-center gap-2">
-                  <Database className="w-4 h-4 text-cyan-400" />
-                  Processos Persistidos Automaticamente no Banco ({processosDb.length})
-                </h2>
-                <div className="flex flex-wrap items-center gap-2">
-                  <a
-                    href="/api/exportar/csv"
-                    className="px-3 py-1.5 rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 border border-emerald-500/40 text-xs text-emerald-200 flex items-center gap-1.5"
-                  >
-                    <Download className="w-3.5 h-3.5" /> Planilha CSV / Sheets
-                  </a>
-                  <a
-                    href="/api/calendario/prazos.ics"
-                    className="px-3 py-1.5 rounded-lg bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/40 text-xs text-indigo-200 flex items-center gap-1.5"
-                  >
-                    <Clock className="w-3.5 h-3.5" /> Todos os Prazos (.ics)
-                  </a>
-                  <a
-                    href="/api/exportar/backup"
-                    className="px-3 py-1.5 rounded-lg bg-cyan-600/20 hover:bg-cyan-600/30 border border-cyan-500/40 text-xs text-cyan-200 flex items-center gap-1.5"
-                  >
-                    <Download className="w-3.5 h-3.5" /> Backup Zero Lock-in (#48)
-                  </a>
-                  <a
-                    href="/api/exportar/backup?lgpd=true"
-                    className="px-3 py-1.5 rounded-lg bg-purple-600/20 hover:bg-purple-600/30 border border-purple-500/40 text-xs text-purple-200 flex items-center gap-1.5"
-                  >
-                    <ShieldAlert className="w-3.5 h-3.5" /> Backup LGPD Anonimizado (#62)
-                  </a>
-                  <button
-                    type="button"
-                    onClick={verificarSaudeDosTribunais}
-                    className="px-3 py-1.5 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-xs text-amber-200 flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <RefreshCw className={`w-3.5 h-3.5 ${verificandoSaude ? 'animate-spin' : ''}`} />
-                    Saúde dos Tribunais (#40/#50)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={carregarBancoEConfig}
-                    className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 border border-slate-700 text-xs text-slate-300 flex items-center gap-1.5 cursor-pointer"
-                  >
-                    <RefreshCw className="w-3.5 h-3.5" /> Atualizar
-                  </button>
-                </div>
-              </div>
-
-              {saudeTribunais.length > 0 && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
-                  {saudeTribunais.map((st, idx) => (
-                    <div
-                      key={idx}
-                      className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5 text-xs"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-white">{st.servico}</span>
-                        <span
-                          className={`px-2 py-0.5 rounded font-bold text-[10px] ${
-                            st.status === 'ONLINE'
-                              ? 'bg-emerald-500/20 text-emerald-300'
-                              : 'bg-rose-500/20 text-rose-300'
-                          }`}
-                        >
-                          {st.status} ({st.latenciaMs}ms)
-                        </span>
-                      </div>
-                      <a
-                        href={st.urlCertidaoIndisponibilidade}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-[11px] text-indigo-400 hover:underline inline-flex items-center gap-1"
-                      >
-                        Baixar Certidão de Indisponibilidade <ExternalLink className="w-3 h-3" />
-                      </a>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {processosDb.length === 0 ? (
-                <p className="text-xs text-slate-500">
-                  Nenhum processo salvo ainda. Ao disparar uma busca na aba Radar de Cliente, OAB ou Processo, as pastas são gravadas automaticamente no SQLite.
-                </p>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                  {processosDb.map((p) => (
-                    <div
-                      key={p.id}
-                      className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 space-y-1.5 text-xs"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="px-2 py-0.5 rounded bg-slate-800 text-indigo-300 font-bold text-[10px]">
-                          {p.siglaTribunal}
-                        </span>
-                        <span className="text-[10px] text-slate-400">
-                          {p._count?.publicacoes || 0} pub. • {p._count?.documentos || 0} doc.
-                        </span>
-                      </div>
-                      <p className="font-mono font-bold text-white">{p.numeroFormatado}</p>
-                      <p className="text-[11px] text-indigo-300">{p.ultimoStatusDetectado}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </section>
+          <PainelConfiguracoes
+            advogadosDb={advogadosDb}
+            clientesDb={clientesDb}
+            execucoesRadar={execucoesRadar}
+            webhooksDb={webhooksDb}
+            processosDb={processosDb}
+            saudeTribunais={saudeTribunais}
+            novoAdvNome={novoAdvNome}
+            setNovoAdvNome={setNovoAdvNome}
+            novoAdvOab={novoAdvOab}
+            setNovoAdvOab={setNovoAdvOab}
+            novoAdvUf={novoAdvUf}
+            setNovoAdvUf={setNovoAdvUf}
+            novoClienteNome={novoClienteNome}
+            setNovoClienteNome={setNovoClienteNome}
+            novoClienteCnpj={novoClienteCnpj}
+            setNovoClienteCnpj={setNovoClienteCnpj}
+            novoWebhookNome={novoWebhookNome}
+            setNovoWebhookNome={setNovoWebhookNome}
+            novoWebhookCanal={novoWebhookCanal}
+            setNovoWebhookCanal={setNovoWebhookCanal}
+            novoWebhookUrl={novoWebhookUrl}
+            setNovoWebhookUrl={setNovoWebhookUrl}
+            rodandoCron={rodandoCron}
+            verificandoSaude={verificandoSaude}
+            tokenJwtGerado={tokenJwtGerado}
+            onAdicionarAdvogado={adicionarAdvogadoDb}
+            onRemoverAdvogado={removerAdvogadoDb}
+            onAdicionarCliente={adicionarClienteDb}
+            onRemoverCliente={removerClienteDb}
+            onDispararVarredura={dispararVarreduraRadar}
+            onAdicionarWebhook={adicionarWebhookDb}
+            onRemoverWebhook={removerWebhookDb}
+            onGerarTokenJwt={gerarTokenMobileJwt}
+            onVerificarSaude={verificarSaudeDosTribunais}
+            onRecarregarTudo={carregarBancoEConfig}
+          />
         )}
 
-        {/* CONTEÚDO DA ABA 3: DOCUMENTAÇÃO DA SUA API */}
-        {abaAtiva === 'API_DOCS' && (
-          <section className="bg-[#0f1628] border border-slate-800 rounded-2xl p-6 space-y-6">
-            <div>
-              <h2 className="text-base font-bold text-white">
-                Como consumir a sua própria API (Web ou App Mobile React Native / Flutter)
-              </h2>
-              <p className="text-xs text-slate-400 mt-1">
-                O seu projeto Next.js já expõe endpoints REST prontos em <code>/api/publicacoes</code> e <code>/api/inspecionar-link</code>.
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              <div className="p-4 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
-                <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 font-mono text-xs font-bold">
-                  GET /api/publicacoes
-                </span>
-                <p className="text-xs text-slate-300">
-                  Busca publicações por OAB, Advogado, Nome do Cliente (ex: LG) ou Processo, analisa concorrência, extrai prazos/valores e retorna tanto as publicações individuais quanto as pastas dos processos já consolidadas.
-                </p>
-                <pre className="text-xs font-mono text-indigo-300 bg-slate-900 p-3 rounded-lg overflow-x-auto">
-{`// Exemplo 1: Monitorar tudo da "LG ELECTRONICS" e comparar com as OABs do seu escritório
-GET /api/publicacoes?nomeParte=LG%20ELECTRONICS&nossasOabs=12345RS,99887SP&dataInicio=2026-11-01&dataFim=2026-11-18
-
-// Exemplo 2: Buscar diretamente pela OAB do advogado
-GET /api/publicacoes?numeroOab=12345&ufOab=RS
-
-// Exemplo 3: Buscar por número de processo específico
-GET /api/publicacoes?numeroProcesso=50099269520204047201`}
-                </pre>
-              </div>
-            </div>
-          </section>
-        )}
+        {/* CONTEÚDO DA ABA: DOCUMENTAÇÃO DA API (ISSUE #75) */}
+        {abaAtiva === 'API_DOCS' && <PainelApiDocs />}
       </main>
     </div>
   );

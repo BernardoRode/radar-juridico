@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import Link from 'next/link';
 
 interface StatusAmbiente {
   banco: {
@@ -30,6 +31,10 @@ interface StatusAmbiente {
  */
 export function PwaEStatusBanner() {
   const [status, setStatus] = useState<StatusAmbiente | null>(null);
+  const [usuarioSessao, setUsuarioSessao] = useState<{
+    nome: string;
+    perfil: string;
+  } | null>(null);
   const [oculto, setOculto] = useState(false);
 
   useEffect(() => {
@@ -43,7 +48,21 @@ export function PwaEStatusBanner() {
         if (data?.sucesso) setStatus(data);
       })
       .catch(() => {});
+
+    fetch('/api/auth/me')
+      .then((r) => r.json())
+      .then((data) => {
+        if (data?.sucesso && data.autenticado && data.usuario) {
+          setUsuarioSessao({ nome: data.usuario.nome, perfil: data.usuario.perfil });
+        }
+      })
+      .catch(() => {});
   }, []);
+
+  async function encerrarSessao() {
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    setUsuarioSessao(null);
+  }
 
   if (!status || oculto) return null;
 
@@ -95,6 +114,25 @@ export function PwaEStatusBanner() {
             <span className="text-amber-300/90 truncate max-w-md" title={status.pendencias.join('\n')}>
               ⚠ {status.pendencias[0]}
             </span>
+          )}
+          {usuarioSessao ? (
+            <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-800 text-slate-200">
+              👤 {usuarioSessao.nome} ({usuarioSessao.perfil})
+              <button
+                type="button"
+                onClick={encerrarSessao}
+                className="text-rose-400 hover:text-rose-300 ml-1 cursor-pointer"
+              >
+                Sair
+              </button>
+            </span>
+          ) : (
+            <Link
+              href="/login"
+              className="px-2 py-0.5 rounded-full bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 font-semibold"
+            >
+              Entrar / Login
+            </Link>
           )}
           <button
             type="button"
