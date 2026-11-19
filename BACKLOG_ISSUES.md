@@ -453,3 +453,59 @@ gh issue create --title "[Memória Coletiva & Auto-Alimentação] Base de Inteli
 gh issue create --title "[Multi-Tenant SaaS] Isolamento Completo de Dados por organizacaoId" --body "Adicionar organizacaoId em ClienteMonitorado, AdvogadoEscritorio, Processo, WebhookAlerta, ExecucaoRadar e LinkCompartilhamento, filtrando todas as rotas /api/* pela organização autenticada."
 gh issue create --title "[API B2B & OpenAPI] Documentação Swagger/OpenAPI (/docs) e Gestão de API Keys por Cliente" --body "Expor especificação OpenAPI 3.1 das 22 rotas REST com página interativa /docs e tabela ApiKeyCliente por organização com planos e contagem de consumo."
 ```
+
+---
+
+## Fase 13: Blindagem Avançada de API, Dores Reais de Devs/Advogados & Nível Judit/Predictus/Digesto (#81–#90)
+
+Levantamento aprofundado em fóruns (`r/direito`, `r/brdev`), Reclame Aqui e comparativo técnico com **Judit, Predictus, Escavador, Digesto, Astrea, Projuris e Res. CNJ 569/2024**:
+
+### Issue #81: [DJEN Blindagem] Paginação Automática (`<= 50 itens/pág.`), Geo-Pinning Brasil (`gru1`) & Retry Inteligente
+- **Status:** 📋 Aberta no GitHub
+- **Prioridade:** P0 (Evita perda silenciosa de publicações e geo-bloqueio do CNJ em nuvem)
+- **Objetivo:** Travar `itensPorPagina <= 50` com paginação automática quando houver mais resultados no DJEN, configurar `"regions": ["gru1"]` (São Paulo) no `vercel.json` para evitar bloqueio de IPs estrangeiros pelo CNJ e aplicar retry com backoff em timeouts de 10s–40s.
+
+### Issue #82: [Datajud Resiliência] Detector de Falha Silenciosa de Shards (`_shards.failed > 0`) & Proteção de Cache L2
+- **Status:** 📋 Aberta no GitHub
+- **Prioridade:** P0 (Evita falsos negativos "processo não encontrado" cacheados por horas)
+- **Objetivo:** Inspecionar `_shards.failed` no retorno do Elasticsearch do Datajud em `src/lib/datajud.ts`; quando houver falha parcial de shard, nunca gravar resultado vazio no `CacheDatajud`, executar retry automático e expor `respostaParcialShards: true` no JSON.
+
+### Issue #83: [Webhooks B2B] Idempotência (`X-Radar-Event-Id`) + Endpoint de Replay de Webhooks Perdidos (`POST /api/webhooks/replay`)
+- **Status:** 📋 Aberta no GitHub
+- **Prioridade:** P1 (Alta — dor nº 1 de devs integrando Escavador/Digesto)
+- **Objetivo:** Enviar header determinístico `X-Radar-Event-Id` em todo webhook para impedir duplicidade no cliente, salvar o payload em `LogEntregaWebhook` e criar `POST /api/webhooks/replay` para reprocessar entregas com `sucesso: false` quando o servidor do cliente ficar fora do ar.
+
+### Issue #84: [API Unificada] Endpoint `GET /api/processo-360` (Fusão DJEN + Datajud + PDFs + Prazos + IA + Modo Hot Storage vs On-Demand)
+- **Status:** 📋 Aberta no GitHub
+- **Prioridade:** P1 (Alta — diferencial competitivo estilo Judit API)
+- **Objetivo:** Criar endpoint único que funde automaticamente partes/advogados/textos do DJEN + movimentações TPU/ajuizamento do Datajud + PDFs extraídos + prazos + análise IA em um único JSON, suportando `?modo=cache` (resposta em milissegundos) vs `?modo=tempo_real`.
+
+### Issue #85: [Compliance Prazos Res. CNJ 569/2024] Auditoria de Atraso de Remessa (PJe vs. DJEN) & Regra dos 5 Dias Úteis Pós-Confirmação DJE
+- **Status:** 📋 Aberta no GitHub
+- **Prioridade:** P1 (Alta — dor quente de controladorias jurídicas em 2025/2026)
+- **Objetivo:** Cruzar `dataHoraAssinatura` (certificado ICP-Brasil do PDF PJe) com `dataDisponibilizacao` do DJEN calculando `diasAtrasoRemessa` para comprovação de tempestividade (Art. 224 CPC), e aplicar a regra da Res. CNJ 569/2024 (citação confirmada no DJE inicia prazo no **5º dia útil** seguinte).
+
+### Issue #86: [Compliance / KYC / Background Check] Endpoint `POST /api/due-diligence` (Score de Risco Jurídico por CPF/CNPJ/Raiz)
+- **Status:** 📋 Aberta no GitHub
+- **Prioridade:** P1 (Alta — novo mercado B2B estilo Predictus API para crédito, RH e homologação de fornecedores)
+- **Objetivo:** Receber CPF, CNPJ ou Raiz de CNPJ e retornar Score de Risco Jurídico (0–100), volume de ações por esfera (Trabalhista, Cível, Fiscal, Execuções, RJ/Falência), alertas societários e passivo estimado em JSON pronto para motores de risco.
+
+### Issue #87: [API em Lote / Batch] Consulta e Monitoramento Assíncrono em Massa (`POST /api/lote/consultar`) com Callback
+- **Status:** 📋 Aberta no GitHub
+- **Prioridade:** P1 (Alta para ERPs jurídicos e grandes departamentos)
+- **Objetivo:** Permitir enviar lotes de 50 a 500 números CNJ ou CNPJs em uma única requisição sem estourar timeout HTTP, gravando progresso na tabela `JobLoteConsulta` (`GET /api/lote/[id]`) e disparando webhook de conclusão ao terminar.
+
+### Issue #88: [Privacidade IA / Segredo de Justiça] PII Vault (Mascarar Dados Antes da LLM) & Bloqueio de LLM Externa em Processos Sigilosos
+- **Status:** 📋 Aberta no GitHub
+- **Prioridade:** P0 (Segurança LGPD e diferencial matador frente a concorrentes)
+- **Objetivo:** Substituir automaticamente CPF, CNPJ, e-mail e nomes sensíveis por placeholders reversíveis antes de enviar texto para LLMs externas (restaurando na resposta) e, quando `nivelSigilo > 0`, bloquear provedores externos permitindo exclusivamente **Ollama local** ou análise heurística.
+
+### Issue #89: [SDK & Developer Experience] SDK Oficial TypeScript/Python (`sdk/`) + Templates Prontos n8n & Postman
+- **Status:** 📋 Aberta no GitHub
+- **Prioridade:** P2 (Média — acelera adoção B2B da API por desenvolvedores)
+- **Objetivo:** Publicar cliente tipado pronto em TypeScript e Python na pasta `sdk/`, coleção exportável Postman/Insomnia e template JSON pronto para **n8n** (Webhook Radar → Resumo IA → WhatsApp/Slack).
+
+### Issue #90: [Motor de Regras No-Code] Regras Customizadas de Alerta & Roteamento por Cliente (`RegraAutomacao`)
+- **Status:** 📋 Aberta no GitHub
+- **Prioridade:** P2 (Média — resolve a crítica de rigidez de Astrea/Projuris/ADVBOX)
+- **Objetivo:** Criar tabela `RegraAutomacao` e CRUD `/api/regras` permitindo definir condições sem código (ex.: *SE tribunal = TRT4 E valor > R$ 50.000 E ato = Sentença → disparar Webhook Sócio + gerar pré-minuta automática*).
