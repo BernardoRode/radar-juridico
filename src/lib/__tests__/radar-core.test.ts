@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, afterEach } from 'vitest';
 import {
   calcularLimiteConfirmacaoDomicilio,
   calcularPrazoFatal,
@@ -24,6 +24,12 @@ import {
 } from '@/lib/seguranca';
 import { resolverIndiceDatajud } from '@/lib/datajud';
 import { assinarJwt, verificarJwt } from '@/lib/auth-jwt';
+import {
+  executarChamadaMultiIA,
+  montarPoolSlotsIA,
+  obterStatusPoolIA,
+  resetarEstadoPoolIA,
+} from '@/lib/ia-router';
 import type { ComunicacaoCNJ } from '@/types/juridico';
 
 describe('Calendário Forense & Auto-Update (auto-update.ts)', () => {
@@ -161,5 +167,67 @@ describe('Segurança Anti-SSRF, Datajud & JWT RBAC', () => {
     expect(payload?.perfil).toBe('SOCIO');
     expect(payload?.organizacao).toBe('Banca Teste');
     expect(verificarJwt(`${token}adulterado`)).toBeNull();
+  });
+});
+
+describe('Roteador Multi-IA Gratuito com Ciclo & Failover (ia-router.ts)', () => {
+  const envBackup = { ...process.env };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+    resetarEstadoPoolIA();
+    process.env = { ...envBackup };
+  });
+
+  it('monta múltiplos slots a partir de chaves e modelos gratuitos no .env', () => {
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    process.env.GROQ_API_KEY = 'gsk_teste_1';
+    process.env.GROQ_MODELS = 'llama-3.3-70b-versatile,llama-3.1-8b-instant';
+    process.env.OPENROUTER_API_KEY = 'sk-or-teste_1';
+    process.env.OPENROUTER_MODELS = 'meta-llama/llama-3.3-70b-instruct:free';
+
+    const slots = montarPoolSlotsIA();
+    expect(slots.length).toBe(3);
+    expect(slots[0].provedor).toBe('GROQ');
+    expect(slots[2].provedor).toBe('OPENROUTER');
+  });
+
+  it('faz failover automático em HTTP 429, coloca slot em cooldown e avança no ciclo', async () => {
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    process.env.GROQ_API_KEY = 'gsk_teste_1';
+    process.env.GROQ_MODELS = 'llama-3.3-70b-versatile';
+    process.env.CEREBRAS_API_KEY = 'csk_teste_1';
+    process.env.CEREBRAS_MODELS = 'llama-3.3-70b';
+
+    const fetchMock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        new Response('Rate limit exceeded', {
+          status: 429,
+          headers: { 'retry-after': '120' },
+        })
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            choices: [{ message: { content: 'Resposta gerada pelo Cerebras no failover.' } }],
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      );
+
+    const res = await executarChamadaMultiIA({ prompt: 'Teste de failover' });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(res?.provedor).toBe('CEREBRAS');
+    expect(res?.modo).toBe('LLM_CEREBRAS');
+    expect(res?.tentativas).toBe(2);
+
+    const status = obterStatusPoolIA();
+    expect(status.totalFailovers).toBe(1);
+    expect(status.slotsEmCooldown).toBe(1);
+    expect(status.slotsDisponiveisAgora).toBe(1);
+    expect(status.provedorAtivo).toBe('CEREBRAS');
   });
 });

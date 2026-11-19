@@ -1,9 +1,16 @@
+import {
+  executarChamadaMultiIA,
+  type ProvedorIAId,
+} from '@/lib/ia-router';
+
 export interface AnaliseIAJuridica {
   resumoExecutivo: string;
   nivelRisco: 'CRITICO' | 'ALTO' | 'MODERADO' | 'BAIXO';
   falhasOuRiscosDetectados: string[];
   oportunidadeComercial: string;
-  modo: 'LLM_GEMINI' | 'LLM_OPENAI' | 'ANALISE_HEURISTICA';
+  modo: 'ANALISE_HEURISTICA' | `LLM_${ProvedorIAId}`;
+  provedorIA?: ProvedorIAId;
+  modeloIA?: string;
 }
 
 export interface ParametrosAnaliseIA {
@@ -15,130 +22,123 @@ export interface ParametrosAnaliseIA {
 }
 
 /**
- * Helper centralizado para chamadas de texto a LLM (Gemini 2.5 Flash ou OpenAI GPT-4o-mini).
- * Retorna `null` se nenhuma chave estiver configurada ou em caso de indisponibilidade,
- * permitindo fallback seguro sem quebrar a aplicação.
+ * Helper centralizado para chamadas de texto usando o Roteador Multi-IA Gratuito.
+ * Rotaciona automaticamente entre Gemini, Groq, Cerebras, OpenRouter, Mistral,
+ * NVIDIA NIM, Hugging Face, Cloudflare Workers AI, Cohere, Ollama e OpenAI
+ * quando algum provedor atinge limite (HTTP 429) ou oscila.
+ * Retorna `null` se nenhuma chave estiver configurada ou todos falharem,
+ * permitindo fallback heurístico seguro sem quebrar a aplicação.
  */
 export async function chamarLlmTexto(
   prompt: string,
   systemInstruction?: string
-): Promise<{ texto: string; modo: 'LLM_GEMINI' | 'LLM_OPENAI' } | null> {
-  const geminiKey = process.env.GEMINI_API_KEY?.trim();
-  const openaiKey = process.env.OPENAI_API_KEY?.trim();
+): Promise<{
+  texto: string;
+  modo: `LLM_${ProvedorIAId}`;
+  provedor: ProvedorIAId;
+  modelo: string;
+} | null> {
+  const resultado = await executarChamadaMultiIA({
+    prompt,
+    systemInstruction,
+    exigirJson: false,
+  });
+  if (!resultado) return null;
 
-  if (geminiKey) {
-    try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(
-          geminiKey
-        )}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            ...(systemInstruction
-              ? { systemInstruction: { parts: [{ text: systemInstruction }] } }
-              : {}),
-            contents: [{ parts: [{ text: prompt }] }],
-          }),
-        }
-      );
-      if (res.ok) {
+  return {
+    texto: resultado.texto,
+    modo: resultado.modo,
+    provedor: resultado.provedor,
+    modelo: resultado.modelo,
+  };
+}
+
+/**
+ * Issue #28: OCR Multimodal real para PDFs escaneados / sem texto selecionável usando Gemini API.
+ * Suporta múltiplas chaves GEMINI_API_KEY separadas por vírgula e rotação entre modelos Flash / Flash-Lite.
+ */
+export async function extrairTextoPdfViaOcrLlm(
+  pdfBuffer: Buffer
+): Promise<{ texto: string; provedor: 'GEMINI_OCR_PDF' } | null> {
+  const geminiKeys = (process.env.GEMINI_API_KEY || '')
+    .split(',')
+    .map((k) => k.trim())
+    .filter(Boolean);
+  if (geminiKeys.length === 0) return null;
+  if (pdfBuffer.length > 12 * 1024 * 1024) return null; // Limite seguro inline
+
+  const modelosGemini = (process.env.GEMINI_MODELS || 'gemini-2.5-flash,gemini-2.5-flash-lite')
+    .split(',')
+    .map((m) => m.trim())
+    .filter(Boolean);
+
+  const base64Pdf = pdfBuffer.toString('base64');
+
+  for (const geminiKey of geminiKeys) {
+    for (const modelo of modelosGemini) {
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(
+            modelo
+          )}:generateContent?key=${encodeURIComponent(geminiKey)}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [
+                {
+                  parts: [
+                    {
+                      inline_data: {
+                        mime_type: 'application/pdf',
+                        data: base64Pdf,
+                      },
+                    },
+                    {
+                      text: 'Faça OCR completo e fiel deste documento judicial brasileiro em português. Retorne apenas o texto transcrito preservando parágrafos, números de processo, valores em reais, prazos e datas, sem comentários adicionais.',
+                    },
+                  ],
+                },
+              ],
+            }),
+          }
+        );
+        if (!res.ok) continue;
         const data = await res.json();
         const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (rawText && String(rawText).trim()) {
-          return { texto: String(rawText).trim(), modo: 'LLM_GEMINI' };
+        if (rawText && String(rawText).trim().length > 10) {
+          return { texto: String(rawText).trim(), provedor: 'GEMINI_OCR_PDF' };
         }
+      } catch {
+        // Tenta próxima chave/modelo Gemini
       }
-    } catch {
-      // Continua para OpenAI ou fallback
-    }
-  }
-
-  if (openaiKey) {
-    try {
-      const messages = [
-        ...(systemInstruction
-          ? [{ role: 'system', content: systemInstruction }]
-          : []),
-        { role: 'user', content: prompt },
-      ];
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${openaiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages,
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const rawText = data?.choices?.[0]?.message?.content;
-        if (rawText && String(rawText).trim()) {
-          return { texto: String(rawText).trim(), modo: 'LLM_OPENAI' };
-        }
-      }
-    } catch {
-      // Fallback
     }
   }
 
   return null;
 }
 
-/**
- * Issue #28: OCR Multimodal real para PDFs escaneados / sem texto selecionável usando Gemini API.
- * Envia o PDF em base64 (até 12 MB) para transcrição fiel do teor judicial.
- */
-export async function extrairTextoPdfViaOcrLlm(
-  pdfBuffer: Buffer
-): Promise<{ texto: string; provedor: 'GEMINI_OCR_PDF' } | null> {
-  const geminiKey = process.env.GEMINI_API_KEY?.trim();
-  if (!geminiKey) return null;
-  if (pdfBuffer.length > 12 * 1024 * 1024) return null; // Limite seguro inline
+function extrairJsonSeguro(rawText: string): Record<string, unknown> | null {
+  const semThink = rawText.replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+  const semFence = semThink
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '')
+    .trim();
 
   try {
-    const base64Pdf = pdfBuffer.toString('base64');
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(
-        geminiKey
-      )}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [
-            {
-              parts: [
-                {
-                  inline_data: {
-                    mime_type: 'application/pdf',
-                    data: base64Pdf,
-                  },
-                },
-                {
-                  text: 'Faça OCR completo e fiel deste documento judicial brasileiro em português. Retorne apenas o texto transcrito preservando parágrafos, números de processo, valores em reais, prazos e datas, sem comentários adicionais.',
-                },
-              ],
-            },
-          ],
-        }),
-      }
-    );
-    if (!res.ok) return null;
-    const data = await res.json();
-    const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-    if (rawText && String(rawText).trim().length > 10) {
-      return { texto: String(rawText).trim(), provedor: 'GEMINI_OCR_PDF' };
-    }
+    return JSON.parse(semFence);
   } catch {
+    const inicio = semFence.indexOf('{');
+    const fim = semFence.lastIndexOf('}');
+    if (inicio >= 0 && fim > inicio) {
+      try {
+        return JSON.parse(semFence.slice(inicio, fim + 1));
+      } catch {
+        return null;
+      }
+    }
     return null;
   }
-
-  return null;
 }
 
 function montarPromptJuridico(params: ParametrosAnaliseIA): string {
@@ -235,83 +235,47 @@ function analiseHeuristicaJuridica(
 }
 
 /**
- * Issue #8: Analisa o texto da publicação/decisão usando Gemini, OpenAI ou fallback heurístico local.
+ * Issue #8: Analisa o texto da publicação/decisão usando o Roteador Multi-IA Gratuito
+ * com rotação automática entre provedores ou fallback heurístico local.
  */
 export async function analisarPublicacaoComIA(
   params: ParametrosAnaliseIA
 ): Promise<AnaliseIAJuridica> {
-  const geminiKey = process.env.GEMINI_API_KEY?.trim();
-  const openaiKey = process.env.OPENAI_API_KEY?.trim();
   const prompt = montarPromptJuridico(params);
 
-  if (geminiKey) {
-    try {
-      const res = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${encodeURIComponent(
-          geminiKey
-        )}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: { responseMimeType: 'application/json' },
-          }),
-        }
-      );
-      if (res.ok) {
-        const data = await res.json();
-        const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (rawText) {
-          const parsed = JSON.parse(rawText);
-          return {
-            resumoExecutivo: parsed.resumoExecutivo,
-            nivelRisco: parsed.nivelRisco || 'MODERADO',
-            falhasOuRiscosDetectados: Array.isArray(parsed.falhasOuRiscosDetectados)
-              ? parsed.falhasOuRiscosDetectados
-              : [],
-            oportunidadeComercial: parsed.oportunidadeComercial || '',
-            modo: 'LLM_GEMINI',
-          };
-        }
-      }
-    } catch {
-      // Fallback para OpenAI ou heurística
-    }
-  }
+  const resposta = await executarChamadaMultiIA({
+    prompt,
+    systemInstruction:
+      'Você é um advogado sênior especialista em inteligência jurídica contenciosa no Brasil. Responda sempre em JSON válido.',
+    exigirJson: true,
+  });
 
-  if (openaiKey) {
-    try {
-      const res = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${openaiKey}`,
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          response_format: { type: 'json_object' },
-          messages: [{ role: 'user', content: prompt }],
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const rawText = data?.choices?.[0]?.message?.content;
-        if (rawText) {
-          const parsed = JSON.parse(rawText);
-          return {
-            resumoExecutivo: parsed.resumoExecutivo,
-            nivelRisco: parsed.nivelRisco || 'MODERADO',
-            falhasOuRiscosDetectados: Array.isArray(parsed.falhasOuRiscosDetectados)
-              ? parsed.falhasOuRiscosDetectados
-              : [],
-            oportunidadeComercial: parsed.oportunidadeComercial || '',
-            modo: 'LLM_OPENAI',
-          };
-        }
-      }
-    } catch {
-      // Fallback para heurística
+  if (resposta) {
+    const parsed = extrairJsonSeguro(resposta.texto);
+    if (parsed && typeof parsed.resumoExecutivo === 'string' && parsed.resumoExecutivo.trim()) {
+      const nivelRaw = String(parsed.nivelRisco || 'MODERADO').toUpperCase();
+      const nivelRisco: AnaliseIAJuridica['nivelRisco'] =
+        nivelRaw === 'CRITICO' ||
+        nivelRaw === 'ALTO' ||
+        nivelRaw === 'MODERADO' ||
+        nivelRaw === 'BAIXO'
+          ? nivelRaw
+          : 'MODERADO';
+
+      return {
+        resumoExecutivo: parsed.resumoExecutivo.trim(),
+        nivelRisco,
+        falhasOuRiscosDetectados: Array.isArray(parsed.falhasOuRiscosDetectados)
+          ? parsed.falhasOuRiscosDetectados.map((item) => String(item))
+          : [],
+        oportunidadeComercial:
+          typeof parsed.oportunidadeComercial === 'string'
+            ? parsed.oportunidadeComercial.trim()
+            : '',
+        modo: resposta.modo,
+        provedorIA: resposta.provedor,
+        modeloIA: resposta.modelo,
+      };
     }
   }
 

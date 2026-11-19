@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
+import { obterStatusPoolIA } from '@/lib/ia-router';
 
 /**
  * GET /api/config/status
@@ -36,13 +37,10 @@ export async function GET() {
   const dbUrl = process.env.DATABASE_URL || '';
   const tipoBanco = dbUrl.startsWith('postgres') ? 'POSTGRESQL' : 'SQLITE_LOCAL';
 
+  const statusPoolIA = obterStatusPoolIA();
   const temGemini = Boolean(process.env.GEMINI_API_KEY?.trim());
   const temOpenAI = Boolean(process.env.OPENAI_API_KEY?.trim());
-  const provedorIA = temGemini
-    ? 'GEMINI'
-    : temOpenAI
-    ? 'OPENAI'
-    : 'HEURISTICA_LOCAL';
+  const provedorIA = statusPoolIA.provedorAtivo;
 
   const temJwtSecret = Boolean(process.env.JWT_SECRET?.trim());
   const temCronSecret = Boolean(process.env.CRON_SECRET?.trim());
@@ -61,7 +59,9 @@ export async function GET() {
     pendencias.push('Nenhum cliente monitorado cadastrado — adicione ao menos 1 empresa para o Radar 24/7.');
   }
   if (provedorIA === 'HEURISTICA_LOCAL') {
-    pendencias.push('IA rodando em modo heurístico local — defina GEMINI_API_KEY ou OPENAI_API_KEY no .env para ativar LLM real.');
+    pendencias.push(
+      'IA rodando em modo heurístico local — adicione chaves gratuitas no .env (GEMINI_API_KEY, GROQ_API_KEY, OPENROUTER_API_KEY, CEREBRAS_API_KEY, etc.) para ativar o Pool Multi-IA.'
+    );
   }
   if (totalWebhooks === 0 && !temResend) {
     pendencias.push('Nenhum canal de alerta ativo (Webhook/Slack/WhatsApp/E-mail) cadastrado.');
@@ -86,7 +86,18 @@ export async function GET() {
       },
     },
     ia: {
-      provedorAtivo: provedorIA,
+      provedorAtivo: statusPoolIA.provedorAtivo,
+      modeloAtivo: statusPoolIA.modeloAtivo,
+      modoOperacao: statusPoolIA.modoOperacao,
+      estrategiaCiclo: statusPoolIA.estrategiaCiclo,
+      totalProvedoresConfigurados: statusPoolIA.totalProvedoresConfigurados,
+      totalSlotsConfigurados: statusPoolIA.totalSlotsConfigurados,
+      slotsDisponiveisAgora: statusPoolIA.slotsDisponiveisAgora,
+      slotsEmCooldown: statusPoolIA.slotsEmCooldown,
+      totalRequisicoes: statusPoolIA.totalRequisicoes,
+      totalFailovers: statusPoolIA.totalFailovers,
+      ultimoUso: statusPoolIA.ultimoUso,
+      slots: statusPoolIA.slots,
       geminiConfigurado: temGemini,
       openaiConfigurado: temOpenAI,
     },

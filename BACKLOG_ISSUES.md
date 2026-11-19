@@ -364,10 +364,10 @@ As 65 issues originais do código local (#1 a #65) estão concluídas e fechadas
 - **Prioridade:** P0 (Crítica para deploy em nuvem)
 - **Objetivo:** Criar instância PostgreSQL gerenciada (Neon/Supabase), migrar `prisma/schema.prisma` de `sqlite` para `postgresql`, gerar `prisma/migrations/` e validar persistência em rede.
 
-### Issue #67: [API de IA] Criar `GEMINI_API_KEY` (Google AI Studio) ou `OPENAI_API_KEY` e Ativar LLM Real
-- **Status:** 📋 Aberta no GitHub ([#67](https://github.com/BernardoRode/radar-juridico/issues/67))
-- **Prioridade:** P0 (Hoje IA roda em fallback heurístico/template)
-- **Objetivo:** Gerar chave de IA, configurar no `.env`/produção e validar modo LLM real em `/api/ia/analisar`, `/api/ia/minuta`, `/api/ia/chat-base` (RAG) e OCR multimodal de PDFs escaneados.
+### Issue #67: [API de IA] Configurar Chaves Gratuitas do Pool Multi-IA no `.env` (PC de Casa) e Validar LLM Real
+- **Status:** 🟡 Em andamento — Roteador Multi-IA Gratuito já implementado em [ia-router.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/ia-router.ts) ([#67](https://github.com/BernardoRode/radar-juridico/issues/67))
+- **Prioridade:** P0 (Pendente gerar chaves gratuitas no PC de casa)
+- **Objetivo:** Gerar chaves gratuitas sem cartão (Google AI Studio / Gemini, Groq, Cloudflare Workers AI, OpenRouter `:free`, NVIDIA NIM, Cerebras, Mistral, Hugging Face, Cohere ou Ollama local), colar no `.env` e validar modo LLM real em `/api/ia/analisar`, `/api/ia/minuta`, `/api/ia/chat-base` (RAG) e OCR multimodal de PDFs escaneados.
 
 ### Issue #68: [Deploy & Cron 24/7] Publicar na Vercel, Configurar Variáveis de Ambiente e Ativar Crons Reais
 - **Status:** 📋 Aberta no GitHub ([#68](https://github.com/BernardoRode/radar-juridico/issues/68))
@@ -408,3 +408,27 @@ As 65 issues originais do código local (#1 a #65) estão concluídas e fechadas
 - **Status:** 📋 Aberta no GitHub ([#75](https://github.com/BernardoRode/radar-juridico/issues/75))
 - **Prioridade:** P2 (Média)
 - **Objetivo:** Quebrar `src/app/page.tsx` em componentes modulares mantendo 100% das funcionalidades, atalhos de teclado e CI verde.
+
+---
+
+## Fase 12: Inteligência Multi-IA Avançada, Economia de Tokens & Memória Coletiva (#76–#78)
+
+*(Planejadas para execução após configuração das chaves gratuitas no PC de casa — sincronizar no GitHub Issues assim que logar no `gh` CLI).*
+
+### Issue #76: [Multi-IA Concorrência] Distribuição Paralela por Carga (*Least-Loaded Round-Robin*) para Múltiplos Clientes Simultâneos
+- **Status:** 📋 Planejada (abrir no GitHub como #76)
+- **Prioridade:** P1 (Alta)
+- **Objetivo:** Evoluir `src/lib/ia-router.ts` com contador `emAndamentoPorSlot` e reserva atômica do slot antes do `fetch`, garantindo que 10+ clientes chamando a API ao mesmo tempo sejam distribuídos em paralelo por IAs diferentes sem fila e sem estourar o RPM de um único provedor.
+
+### Issue #77: [Economia de Tokens] Cache de Análises IA por Hash SHA-256 + Limpeza de Ruído de Contexto (*Context Pruning*)
+- **Status:** 📋 Planejada (abrir no GitHub como #77)
+- **Prioridade:** P1 (Alta)
+- **Objetivo:** Criar tabela `CacheAnaliseIA` no Prisma indexada pelo SHA-256 do texto normalizado (evitando reanalisar despachos/publicações idênticos), limpar cabeçalhos/rodapés repetitivos do DJEN/PJe antes de enviar à LLM e rotear tarefas simples (JSON/resumo curto) para modelos leves (`flash-lite`, `8b`) vs. tarefas complexas (minutas/RAG) para modelos fortes (`flash`, `70b`).
+
+### Issue #78: [Memória Coletiva & Auto-Alimentação] Base de Inteligência Jurídica Anonimizada entre Clientes (LGPD)
+- **Status:** 📋 Planejada (abrir no GitHub como #78)
+- **Prioridade:** P1 (Alta)
+- **Objetivo:** Criar camada de aprendizado coletivo 100% anonimizada (zero exposição de nomes, CPFs ou processos sigilosos entre clientes):
+  - **Perfil Coletivo por Vara / Magistrado (`assinadoPor`):** registrar teses aceitas, súmulas citadas e taxa de liminares para enriquecer automaticamente as análises de outros clientes que caírem na mesma Vara;
+  - **Biblioteca Viva de Pré-Minutas Validadas (Few-Shot):** salvar estruturas jurídicas anonimizadas aprovadas por advogados para melhorar a qualidade das peças geradas para os próximos clientes;
+  - **Cache Compartilhado de Despachos-Padrão Públicos do DJEN:** reaproveitar interpretações de atos rotineiros de cartório sem gastar novos tokens.

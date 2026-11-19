@@ -14,7 +14,12 @@ interface StatusAmbiente {
     };
   };
   ia: {
-    provedorAtivo: 'GEMINI' | 'OPENAI' | 'HEURISTICA_LOCAL';
+    provedorAtivo: string;
+    modeloAtivo?: string | null;
+    totalProvedoresConfigurados?: number;
+    totalSlotsConfigurados?: number;
+    slotsDisponiveisAgora?: number;
+    slotsEmCooldown?: number;
   };
   prontoParaUsoLocal: boolean;
   pendencias: string[];
@@ -66,8 +71,16 @@ export function PwaEStatusBanner() {
                 ? 'bg-amber-500/15 text-amber-300 border border-amber-500/30'
                 : 'bg-indigo-500/15 text-indigo-300 border border-indigo-500/30'
             }`}
+            title={
+              status.ia.modeloAtivo
+                ? `Modelo atual: ${status.ia.modeloAtivo} | Provedores: ${status.ia.totalProvedoresConfigurados ?? 0} | Slots disponíveis: ${status.ia.slotsDisponiveisAgora ?? 0}/${status.ia.totalSlotsConfigurados ?? 0}`
+                : 'Configure provedores gratuitos no .env para ativar o Pool Multi-IA'
+            }
           >
             IA: {status.ia.provedorAtivo}
+            {status.ia.totalSlotsConfigurados && status.ia.totalSlotsConfigurados > 1
+              ? ` (${status.ia.slotsDisponiveisAgora ?? status.ia.totalSlotsConfigurados}/${status.ia.totalSlotsConfigurados} slots)`
+              : ''}
           </span>
           <span className="hidden lg:inline text-slate-500">
             Atalhos (#49): <kbd className="px-1 bg-slate-800 rounded text-slate-300">J</kbd>/
