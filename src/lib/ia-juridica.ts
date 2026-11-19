@@ -1,4 +1,9 @@
 import {
+  deveBloquearLlmExternaPorSigilo,
+  mascararDadosSensiveisPii,
+  restaurarDadosSensiveisPii,
+} from '@/lib/pii-vault';
+import {
   executarChamadaMultiIA,
   type ProvedorIAId,
 } from '@/lib/ia-router';
@@ -31,6 +36,7 @@ export interface ParametrosAnaliseIA {
   tipoAtoDetectado?: string;
   tribunal?: string;
   numeroProcesso?: string;
+  nivelSigilo?: number;
 }
 
 /**
@@ -51,8 +57,12 @@ export async function chamarLlmTexto(
   provedor: ProvedorIAId;
   modelo: string;
 } | null> {
+  if (deveBloquearLlmExternaPorSigilo(undefined, prompt) && !process.env.OLLAMA_BASE_URL) {
+    return null;
+  }
+  const pii = mascararDadosSensiveisPii(prompt);
   const resultado = await executarChamadaMultiIA({
-    prompt,
+    prompt: pii.textoMascarado,
     systemInstruction,
     exigirJson: false,
     complexidade,
@@ -60,7 +70,7 @@ export async function chamarLlmTexto(
   if (!resultado) return null;
 
   return {
-    texto: resultado.texto,
+    texto: restaurarDadosSensiveisPii(resultado.texto, pii.mapaReversao),
     modo: resultado.modo,
     provedor: resultado.provedor,
     modelo: resultado.modelo,
@@ -270,8 +280,13 @@ export async function analisarPublicacaoComIA(
     };
   }
 
-  const contextoColetivo = await obterContextoColetivoVara(params.tribunal);
-  const promptBase = montarPromptJuridico({ ...params, texto: textoLimpo });
+  // Issue #88: Bloqueia envio a LLMs externas em processos sob Segredo de Justiça
+  if (deveBloquearLlmExternaPorSigilo(params.nivelSigilo, params.texto) && !process.env.OLLAMA_BASE_URL) {
+    return analiseHeuristicaJuridica(params);
+  }
+  const pii = mascararDadosSensiveisPii(textoLimpo);
+    const contextoColetivo = await obterContextoColetivoVara(params.tribunal);
+  const promptBase = montarPromptJuridico({ ...params, texto: pii.textoMascarado });
   const prompt = contextoColetivo
     ? `${promptBase}\n\n[MEMÓRIA COLETIVA ANONIMIZADA DO TRIBUNAL — USE COMO REFERÊNCIA COMPLEMENTAR]:\n${contextoColetivo}`
     : promptBase;
@@ -297,7 +312,7 @@ export async function analisarPublicacaoComIA(
           : 'MODERADO';
 
       const resultadoFinal: AnaliseIAJuridica = {
-        resumoExecutivo: parsed.resumoExecutivo.trim(),
+        resumoExecutivo: restaurarDadosSensiveisPii(parsed.resumoExecutivo.trim(), pii.mapaReversao),
         nivelRisco,
         falhasOuRiscosDetectados: Array.isArray(parsed.falhasOuRiscosDetectados)
           ? parsed.falhasOuRiscosDetectados.map((item) => String(item))
