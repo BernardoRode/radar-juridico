@@ -385,7 +385,7 @@ As 65 issues originais do código local (#1 a #65) estão concluídas e fechadas
 - **Objetivo:** Conectar ao menos um serviço externo real (Resend E-mail, Evolution API/n8n para WhatsApp ou Slack Incoming Webhook) e validar entregas em `LogEntregaWebhook`.
 
 ### Issue #71: [Datajud CNJ & Tribunais] Validar Chave Datajud e Testar Captura Real nos Tribunais-Alvo
-- **Status:** 📋 Aberta no GitHub ([#71](https://github.com/BernardoRode/radar-juridico/issues/71))
+- **Status:** ✅ Concluído (captura ao vivo validada em `TRT4` 183 pub., `TJRS` 1.298 pub., `TJSP` 4.127 pub., PJe TRT4 ONLINE, eproc TRF4 ONLINE, Datajud TRF4 com Cache L2 618ms → 74ms e correção do health-check DJEN em [saude-tribunais/route.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/app/api/saude-tribunais/route.ts)) ([#71](https://github.com/BernardoRode/radar-juridico/issues/71))
 - **Prioridade:** P1 (Alta)
 - **Objetivo:** Validar `DATAJUD_API_KEY` e testar captura ao vivo em processos reais nos tribunais do escritório (`TJRS`, `TRT4`, `TRF4`, `TJSP`), cache L2 (`CacheDatajud`), PJe, eproc e `LogSaudeTribunal`.
 

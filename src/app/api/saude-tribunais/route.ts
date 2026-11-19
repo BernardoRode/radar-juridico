@@ -69,8 +69,9 @@ export async function GET() {
     testarEndpoint(
       'Comunica PJe / DJEN Nacional (CNJ)',
       'DJEN',
-      'https://comunicaapi.pje.jus.br/api/v1/comunicacao?pagina=1&itensPorPagina=1&siglaTribunal=TRT4',
-      'https://www.cnj.jus.br/programas-e-acoes/processo-judicial-eletronico-pje/certidoes-de-indisponibilidade/'
+      'https://comunicaapi.pje.jus.br/api/v1/comunicacao?pagina=1&itensPorPagina=1&siglaTribunal=TRT4&nomeParte=BRASIL',
+      'https://www.cnj.jus.br/programas-e-acoes/processo-judicial-eletronico-pje/certidoes-de-indisponibilidade/',
+      { headers: { Accept: 'application/json' } }
     ),
     testarEndpoint(
       'PJe TRT4 (API Validação de Documentos Assinados)',

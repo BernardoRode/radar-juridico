@@ -16,6 +16,7 @@ import {
   Trash2,
   Users,
 } from 'lucide-react';
+import { PainelB2BeMemoriaColetiva } from '@/components/PainelB2BeMemoriaColetiva';
 
 export interface AdvogadoDbItem {
   id: string;
@@ -622,6 +623,9 @@ export function PainelConfiguracoes({
           )}
         </div>
       </div>
+
+      {/* Issue #78 + #80: API Keys B2B & Memória Coletiva LGPD */}
+      <PainelB2BeMemoriaColetiva />
 
       {/* Worker / Cron Radar 24/7 (Issue #7) */}
       <div className="bg-[#0f1628] border border-slate-800 rounded-2xl p-5 space-y-4">
