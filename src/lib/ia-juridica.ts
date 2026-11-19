@@ -2,6 +2,12 @@ import {
   executarChamadaMultiIA,
   type ProvedorIAId,
 } from '@/lib/ia-router';
+import {
+  buscarCacheAnaliseIA,
+  gerarHashContextoIA,
+  limparRuidoContextoJuridico,
+  salvarCacheAnaliseIA,
+} from '@/lib/ia-cache';
 
 export interface AnaliseIAJuridica {
   resumoExecutivo: string;
@@ -11,6 +17,7 @@ export interface AnaliseIAJuridica {
   modo: 'ANALISE_HEURISTICA' | `LLM_${ProvedorIAId}`;
   provedorIA?: ProvedorIAId;
   modeloIA?: string;
+  cacheHit?: boolean;
 }
 
 export interface ParametrosAnaliseIA {
@@ -31,7 +38,8 @@ export interface ParametrosAnaliseIA {
  */
 export async function chamarLlmTexto(
   prompt: string,
-  systemInstruction?: string
+  systemInstruction?: string,
+  complexidade?: 'LEVE' | 'FORTE'
 ): Promise<{
   texto: string;
   modo: `LLM_${ProvedorIAId}`;
@@ -42,6 +50,7 @@ export async function chamarLlmTexto(
     prompt,
     systemInstruction,
     exigirJson: false,
+    complexidade,
   });
   if (!resultado) return null;
 
@@ -235,19 +244,35 @@ function analiseHeuristicaJuridica(
 }
 
 /**
- * Issue #8: Analisa o texto da publicação/decisão usando o Roteador Multi-IA Gratuito
- * com rotação automática entre provedores ou fallback heurístico local.
+ * Issue #8 + #76 + #77: Analisa o texto da publicação/decisão usando Context Pruning,
+ * Cache SHA-256 (0 tokens em textos já analisados) e o Roteador Multi-IA Gratuito.
  */
 export async function analisarPublicacaoComIA(
   params: ParametrosAnaliseIA
 ): Promise<AnaliseIAJuridica> {
-  const prompt = montarPromptJuridico(params);
+  const textoLimpo = limparRuidoContextoJuridico(params.texto, 4500);
+  const hashContexto = gerarHashContextoIA(
+    'ANALISE_PUBLICACAO',
+    `${params.statusConcorrencia || ''}|${params.tipoAtoDetectado || ''}|${params.tribunal || ''}|${textoLimpo}`
+  );
+
+  // Issue #77: Cache SHA-256 antes de chamar qualquer LLM
+  const emCache = await buscarCacheAnaliseIA<AnaliseIAJuridica>(hashContexto);
+  if (emCache?.dados?.resumoExecutivo) {
+    return {
+      ...emCache.dados,
+      cacheHit: true,
+    };
+  }
+
+  const prompt = montarPromptJuridico({ ...params, texto: textoLimpo });
 
   const resposta = await executarChamadaMultiIA({
     prompt,
     systemInstruction:
       'Você é um advogado sênior especialista em inteligência jurídica contenciosa no Brasil. Responda sempre em JSON válido.',
     exigirJson: true,
+    complexidade: 'LEVE',
   });
 
   if (resposta) {
@@ -262,7 +287,7 @@ export async function analisarPublicacaoComIA(
           ? nivelRaw
           : 'MODERADO';
 
-      return {
+      const resultadoFinal: AnaliseIAJuridica = {
         resumoExecutivo: parsed.resumoExecutivo.trim(),
         nivelRisco,
         falhasOuRiscosDetectados: Array.isArray(parsed.falhasOuRiscosDetectados)
@@ -275,7 +300,19 @@ export async function analisarPublicacaoComIA(
         modo: resposta.modo,
         provedorIA: resposta.provedor,
         modeloIA: resposta.modelo,
+        cacheHit: false,
       };
+
+      await salvarCacheAnaliseIA({
+        hashConteudo: hashContexto,
+        tipo: 'ANALISE_PUBLICACAO',
+        provedorIA: resposta.provedor,
+        modeloIA: resposta.modelo,
+        dados: resultadoFinal,
+        ttlHoras: 168,
+      });
+
+      return resultadoFinal;
     }
   }
 
@@ -339,7 +376,28 @@ export async function gerarPreMinutaPeticao(
     tituloPeca = 'Petição de Habilitação nos Autos e Juntada de Procuração';
   }
 
-  // Tenta geração contextualizada via LLM real (Gemini / OpenAI) quando houver chave configurada
+  const textoPubLimpo = limparRuidoContextoJuridico(params.textoPublicacao || '', 4500);
+  const textoPdfLimpo = params.textoPdfExtraido
+    ? limparRuidoContextoJuridico(params.textoPdfExtraido, 5500)
+    : '';
+
+  const hashMinuta = gerarHashContextoIA(
+    'PRE_MINUTA',
+    `${params.numeroProcesso}|${tituloPeca}|${textoPubLimpo}|${textoPdfLimpo}`
+  );
+  const minutaEmCache = await buscarCacheAnaliseIA<{
+    tituloPeca: string;
+    minutaTexto: string;
+    modo: string;
+  }>(hashMinuta);
+  if (minutaEmCache?.dados?.minutaTexto) {
+    return {
+      ...minutaEmCache.dados,
+      modo: `${minutaEmCache.dados.modo}_CACHE`,
+    };
+  }
+
+  // Tenta geração contextualizada via LLM real (modelo FORTE) com Context Pruning (#77)
   const promptMinuta = `Elabore uma pré-minuta jurídica formal em português brasileiro, pronta para revisão do advogado, seguindo rigorosamente o CPC/CLT aplicável.
 
 DADOS DO PROCESSO:
@@ -351,10 +409,10 @@ DADOS DO PROCESSO:
 - Data: ${dataHoje}
 
 TEXTO DA PUBLICAÇÃO:
-${(params.textoPublicacao || '').slice(0, 5000)}
+${textoPubLimpo}
 ${
-  params.textoPdfExtraido
-    ? `\nINTEIRO TEOR DO PDF ASSINADO EXTRAÍDO:\n${params.textoPdfExtraido.slice(0, 6000)}`
+  textoPdfLimpo
+    ? `\nINTEIRO TEOR DO PDF ASSINADO EXTRAÍDO:\n${textoPdfLimpo}`
     : ''
 }
 
@@ -365,15 +423,25 @@ INSTRUÇÕES:
 
   const llmRes = await chamarLlmTexto(
     promptMinuta,
-    'Você é um advogado sênior contencioso brasileiro especialista em redação de peças processuais precisas e objetivas.'
+    'Você é um advogado sênior contencioso brasileiro especialista em redação de peças processuais precisas e objetivas.',
+    'FORTE'
   );
 
   if (llmRes) {
-    return {
+    const resultadoMinuta = {
       tituloPeca,
       modo: llmRes.modo,
       minutaTexto: llmRes.texto,
     };
+    await salvarCacheAnaliseIA({
+      hashConteudo: hashMinuta,
+      tipo: 'PRE_MINUTA',
+      provedorIA: llmRes.provedor,
+      modeloIA: llmRes.modelo,
+      dados: resultadoMinuta,
+      ttlHoras: 168,
+    });
+    return resultadoMinuta;
   }
 
   // Fallback estruturado quando não há GEMINI_API_KEY / OPENAI_API_KEY

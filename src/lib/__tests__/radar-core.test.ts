@@ -35,6 +35,10 @@ import {
   obterStatusPoolIA,
   resetarEstadoPoolIA,
 } from '@/lib/ia-router';
+import {
+  gerarHashContextoIA,
+  limparRuidoContextoJuridico,
+} from '@/lib/ia-cache';
 import type { ComunicacaoCNJ } from '@/types/juridico';
 
 describe('Calendário Forense & Auto-Update (auto-update.ts)', () => {
@@ -243,5 +247,83 @@ describe('Roteador Multi-IA Gratuito com Ciclo & Failover (ia-router.ts)', () =>
     expect(status.slotsEmCooldown).toBe(1);
     expect(status.slotsDisponiveisAgora).toBe(1);
     expect(status.provedorAtivo).toBe('CEREBRAS');
+  });
+
+  it('distribui 3 chamadas simultâneas em paralelo para 3 provedores diferentes sem fila (Issue #76)', async () => {
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    process.env.GROQ_API_KEY = 'gsk_teste_1';
+    process.env.GROQ_MODELS = 'llama-3.3-70b-versatile';
+    process.env.CEREBRAS_API_KEY = 'csk_teste_1';
+    process.env.CEREBRAS_MODELS = 'llama-3.3-70b';
+    process.env.OPENROUTER_API_KEY = 'sk-or-teste_1';
+    process.env.OPENROUTER_MODELS = 'meta-llama/llama-3.3-70b-instruct:free';
+
+    const resolvers: Array<() => void> = [];
+    vi.spyOn(globalThis, 'fetch').mockImplementation(
+      () =>
+        new Promise<Response>((resolve) => {
+          resolvers.push(() =>
+            resolve(
+              new Response(
+                JSON.stringify({ choices: [{ message: { content: 'OK paralelo' } }] }),
+                { status: 200, headers: { 'Content-Type': 'application/json' } }
+              )
+            )
+          );
+        })
+    );
+
+    const p1 = executarChamadaMultiIA({ prompt: 'Cliente 1' });
+    const p2 = executarChamadaMultiIA({ prompt: 'Cliente 2' });
+    const p3 = executarChamadaMultiIA({ prompt: 'Cliente 3' });
+
+    // Enquanto as 3 rodam simultaneamente, cada slot deve ter exatamente 1 em andamento
+    const statusDurante = obterStatusPoolIA();
+    expect(statusDurante.totalEmAndamentoAgora).toBe(3);
+
+    resolvers.forEach((r) => r());
+    const [r1, r2, r3] = await Promise.all([p1, p2, p3]);
+    const provedoresUsados = new Set([r1?.provedor, r2?.provedor, r3?.provedor]);
+    expect(provedoresUsados.size).toBe(3);
+    expect(obterStatusPoolIA().totalEmAndamentoAgora).toBe(0);
+  });
+
+  it('limpa ruído jurídico (Context Pruning), gera hash SHA-256 e roteia LEVE vs FORTE (Issue #77)', async () => {
+    const bruto = `
+      Intime-se a ré para pagar R$ 25.000,00 em 5 dias.
+      ==============================================
+      Documento assinado eletronicamente por Juiz Fulano conforme Lei 11.419/2006.
+      A autenticidade do documento pode ser conferida no site do tribunal usando CRC ABCD1234
+      Código verificador: 9988776655
+    `;
+    const limpo = limparRuidoContextoJuridico(bruto);
+    expect(limpo).toContain('Intime-se a ré para pagar R$ 25.000,00 em 5 dias.');
+    expect(limpo).not.toContain('Documento assinado eletronicamente');
+    expect(limpo).not.toContain('Código verificador');
+
+    const h1 = gerarHashContextoIA('ANALISE_PUBLICACAO', 'Intime-se   a parte.');
+    const h2 = gerarHashContextoIA('ANALISE_PUBLICACAO', 'intime-se a parte.');
+    expect(h1).toMatch(/^[0-9a-f]{64}$/);
+    expect(h1).toBe(h2);
+
+    // Roteamento LEVE vs FORTE no mesmo provedor
+    delete process.env.GEMINI_API_KEY;
+    delete process.env.OPENAI_API_KEY;
+    process.env.GROQ_API_KEY = 'gsk_teste_1';
+    process.env.GROQ_MODELS = 'llama-3.3-70b-versatile,llama-3.1-8b-instant';
+
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async () =>
+      new Response(
+        JSON.stringify({ choices: [{ message: { content: 'OK' } }] }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }
+      )
+    );
+
+    const resLeve = await executarChamadaMultiIA({ prompt: 'Resumo', complexidade: 'LEVE' });
+    expect(resLeve?.modelo).toBe('llama-3.1-8b-instant');
+
+    const resForte = await executarChamadaMultiIA({ prompt: 'Minuta', complexidade: 'FORTE' });
+    expect(resForte?.modelo).toBe('llama-3.3-70b-versatile');
   });
 });

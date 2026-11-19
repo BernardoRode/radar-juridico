@@ -416,12 +416,12 @@ As 65 issues originais do código local (#1 a #65) estão concluídas e fechadas
 *(Documentadas localmente — como o `gh` CLI não está instalado neste PC, rode os comandos do final desta seção no PC de casa para abrir `#76`–`#80` no GitHub Issues em segundos).*
 
 ### Issue #76: [Multi-IA Concorrência] Distribuição Paralela por Carga (*Least-Loaded Round-Robin*) para Múltiplos Clientes Simultâneos
-- **Status:** 📋 Planejada (abrir no GitHub como #76)
+- **Status:** ✅ Concluído ([ia-router.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/ia-router.ts) + teste de concorrência no Vitest) ([#76](https://github.com/BernardoRode/radar-juridico/issues/76))
 - **Prioridade:** P1 (Alta)
 - **Objetivo:** Evoluir `src/lib/ia-router.ts` com contador `emAndamentoPorSlot` e reserva atômica do slot antes do `fetch`, garantindo que 10+ clientes chamando a API ao mesmo tempo sejam distribuídos em paralelo por IAs diferentes sem fila e sem estourar o RPM de um único provedor.
 
 ### Issue #77: [Economia de Tokens] Cache de Análises IA por Hash SHA-256 + Limpeza de Ruído de Contexto (*Context Pruning*)
-- **Status:** 📋 Planejada (abrir no GitHub como #77)
+- **Status:** ✅ Concluído ([ia-cache.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/ia-cache.ts) + `CacheAnaliseIA` no Prisma + roteamento LEVE/FORTE em [ia-juridica.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/ia-juridica.ts)) ([#77](https://github.com/BernardoRode/radar-juridico/issues/77))
 - **Prioridade:** P1 (Alta)
 - **Objetivo:** Criar tabela `CacheAnaliseIA` no Prisma indexada pelo SHA-256 do texto normalizado (evitando reanalisar despachos/publicações idênticos), limpar cabeçalhos/rodapés repetitivos do DJEN/PJe antes de enviar à LLM e rotear tarefas simples (JSON/resumo curto) para modelos leves (`flash-lite`, `8b`) vs. tarefas complexas (minutas/RAG) para modelos fortes (`flash`, `70b`).
 

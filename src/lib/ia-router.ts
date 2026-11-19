@@ -56,6 +56,7 @@ export interface StatusPoolIA {
   totalSlotsConfigurados: number;
   slotsDisponiveisAgora: number;
   slotsEmCooldown: number;
+  totalEmAndamentoAgora: number;
   totalRequisicoes: number;
   totalFailovers: number;
   ultimoUso: {
@@ -68,6 +69,7 @@ export interface StatusPoolIA {
     provedor: ProvedorIAId;
     modelo: string;
     status: 'DISPONIVEL' | 'EM_COOLDOWN';
+    emAndamentoAgora: number;
     cooldownSegundosRestantes: number;
     motivoCooldown?: string;
   }>;
@@ -76,6 +78,7 @@ export interface StatusPoolIA {
 interface EstadoPoolGlobal {
   ponteiroCiclo: number;
   cooldownPorSlot: Map<string, CooldownSlot>;
+  emAndamentoPorSlot: Map<string, number>;
   totalRequisicoes: number;
   totalFailovers: number;
   ultimoUso: { provedor: ProvedorIAId; modelo: string; em: string } | null;
@@ -90,6 +93,7 @@ function obterEstadoGlobal(): EstadoPoolGlobal {
     globalForIaRouter.__radarIaRouterEstado = {
       ponteiroCiclo: 0,
       cooldownPorSlot: new Map<string, CooldownSlot>(),
+      emAndamentoPorSlot: new Map<string, number>(),
       totalRequisicoes: 0,
       totalFailovers: 0,
       ultimoUso: null,
@@ -102,6 +106,7 @@ export function resetarEstadoPoolIA(): void {
   const estado = obterEstadoGlobal();
   estado.ponteiroCiclo = 0;
   estado.cooldownPorSlot.clear();
+  estado.emAndamentoPorSlot.clear();
   estado.totalRequisicoes = 0;
   estado.totalFailovers = 0;
   estado.ultimoUso = null;
@@ -571,17 +576,36 @@ async function dispararRequisicaoSlot(
   }
 }
 
+function pontuarAdequacaoModelo(
+  modelo: string,
+  complexidade?: 'LEVE' | 'FORTE'
+): number {
+  if (!complexidade) return 0;
+  const m = modelo.toLowerCase();
+  const ehLeve =
+    m.includes('lite') ||
+    m.includes('8b') ||
+    m.includes('mini') ||
+    m.includes('nemo') ||
+    m.includes('3b') ||
+    m.includes('7b');
+  if (complexidade === 'LEVE') return ehLeve ? 0 : 1;
+  return ehLeve ? 1 : 0;
+}
+
 /**
- * Executa a chamada no pool Multi-IA com rotação cíclica automática.
+ * Issue #76 + #77: Executa a chamada no pool Multi-IA com distribuição paralela por carga
+ * (Least-Loaded Round-Robin), reserva atômica do slot antes do `fetch` e roteamento por complexidade.
  * - Pula slots em cooldown.
+ * - Múltiplos clientes simultâneos são distribuídos automaticamente em IAs diferentes sem fila.
  * - Ao receber 429/erro, coloca o slot em cooldown e avança para o próximo na mesma chamada.
- * - Retorna `null` apenas se nenhum slot estiver configurado ou todos falharem.
  */
 export async function executarChamadaMultiIA(params: {
   prompt: string;
   systemInstruction?: string;
   exigirJson?: boolean;
   timeoutMs?: number;
+  complexidade?: 'LEVE' | 'FORTE';
 }): Promise<ResultadoChamadaMultiIA | null> {
   const slots = montarPoolSlotsIA();
   if (slots.length === 0) return null;
@@ -591,44 +615,80 @@ export async function executarChamadaMultiIA(params: {
   const estrategiaRoundRobin =
     (process.env.IA_MODO_CICLO || '').toUpperCase() === 'ROUND_ROBIN';
 
+  // Reserva atômica do ponto de partida antes de qualquer `await`
   const inicio = estado.ponteiroCiclo % slots.length;
-  const ordenadosPorCiclo: Array<{ slot: SlotIA; idx: number }> = [];
-  for (let i = 0; i < slots.length; i++) {
-    const idx = (inicio + i) % slots.length;
-    ordenadosPorCiclo.push({ slot: slots[idx], idx });
+  if (estrategiaRoundRobin) {
+    estado.ponteiroCiclo = (inicio + 1) % slots.length;
   }
 
-  const disponiveis = ordenadosPorCiclo.filter(({ slot }) => {
-    const cd = estado.cooldownPorSlot.get(slot.id);
-    if (!cd) return true;
-    if (agora >= cd.ate) {
-      estado.cooldownPorSlot.delete(slot.id);
-      return true;
-    }
-    return false;
-  });
+  const ordenadosPorCiclo: Array<{ slot: SlotIA; idx: number; ordemCiclo: number }> = [];
+  for (let i = 0; i < slots.length; i++) {
+    const idx = (inicio + i) % slots.length;
+    ordenadosPorCiclo.push({ slot: slots[idx], idx, ordemCiclo: i });
+  }
+
+  const disponiveis = ordenadosPorCiclo
+    .filter(({ slot }) => {
+      const cd = estado.cooldownPorSlot.get(slot.id);
+      if (!cd) return true;
+      if (agora >= cd.ate) {
+        estado.cooldownPorSlot.delete(slot.id);
+        return true;
+      }
+      return false;
+    })
+    // Least-Loaded Round-Robin (#76) + Preferência Leve vs. Forte (#77):
+    // 1) Sempre prioriza slots com menos requisições em andamento agora (evita fila/trombada)
+    // 2) Desempata pela adequação do modelo (LEVE vs FORTE) quando informado
+    // 3) Mantém a ordem circular do pool
+    .sort((a, b) => {
+      const cargaA = estado.emAndamentoPorSlot.get(a.slot.id) ?? 0;
+      const cargaB = estado.emAndamentoPorSlot.get(b.slot.id) ?? 0;
+      if (cargaA !== cargaB) return cargaA - cargaB;
+
+      const adequacaoA = pontuarAdequacaoModelo(a.slot.modelo, params.complexidade);
+      const adequacaoB = pontuarAdequacaoModelo(b.slot.modelo, params.complexidade);
+      if (adequacaoA !== adequacaoB) return adequacaoA - adequacaoB;
+
+      return a.ordemCiclo - b.ordemCiclo;
+    });
 
   // Se todos estiverem em cooldown, tenta o que tem cooldown mais próximo de vencer
   const filaTentativa =
     disponiveis.length > 0
       ? disponiveis
-      : [...ordenadosPorCiclo].sort((a, b) => {
-          const cdA = estado.cooldownPorSlot.get(a.slot.id)?.ate ?? 0;
-          const cdB = estado.cooldownPorSlot.get(b.slot.id)?.ate ?? 0;
-          return cdA - cdB;
-        }).slice(0, 1);
+      : [...ordenadosPorCiclo]
+          .sort((a, b) => {
+            const cdA = estado.cooldownPorSlot.get(a.slot.id)?.ate ?? 0;
+            const cdB = estado.cooldownPorSlot.get(b.slot.id)?.ate ?? 0;
+            return cdA - cdB;
+          })
+          .slice(0, 1);
 
   let tentativas = 0;
 
   for (const { slot, idx } of filaTentativa) {
     tentativas++;
-    const resposta = await dispararRequisicaoSlot(
-      slot,
-      params.prompt,
-      params.systemInstruction,
-      Boolean(params.exigirJson),
-      params.timeoutMs
-    );
+    const emAndamentoAntes = estado.emAndamentoPorSlot.get(slot.id) ?? 0;
+    estado.emAndamentoPorSlot.set(slot.id, emAndamentoAntes + 1);
+
+    let resposta: Awaited<ReturnType<typeof dispararRequisicaoSlot>>;
+    try {
+      resposta = await dispararRequisicaoSlot(
+        slot,
+        params.prompt,
+        params.systemInstruction,
+        Boolean(params.exigirJson),
+        params.timeoutMs
+      );
+    } finally {
+      const atual = estado.emAndamentoPorSlot.get(slot.id) ?? 1;
+      if (atual <= 1) {
+        estado.emAndamentoPorSlot.delete(slot.id);
+      } else {
+        estado.emAndamentoPorSlot.set(slot.id, atual - 1);
+      }
+    }
 
     if (resposta.ok) {
       estado.cooldownPorSlot.delete(slot.id);
@@ -638,9 +698,9 @@ export async function executarChamadaMultiIA(params: {
         modelo: slot.modelo,
         em: new Date().toISOString(),
       };
-      // Em FAILOVER_CICLICO permanece no slot atual até ele bater o limite;
-      // em ROUND_ROBIN já avança para o próximo a cada requisição.
-      estado.ponteiroCiclo = estrategiaRoundRobin ? (idx + 1) % slots.length : idx;
+      if (!estrategiaRoundRobin) {
+        estado.ponteiroCiclo = idx;
+      }
 
       return {
         texto: resposta.texto,
@@ -678,17 +738,23 @@ export function obterStatusPoolIA(): StatusPoolIA {
   const agora = Date.now();
 
   const provedoresUnicos = new Set(slots.map((s) => s.provedor));
+  let totalEmAndamentoAgora = 0;
+
   const detalhesSlots = slots.map((slot) => {
     const cd = estado.cooldownPorSlot.get(slot.id);
     const emCooldown = Boolean(cd && agora < cd.ate);
     if (cd && !emCooldown) {
       estado.cooldownPorSlot.delete(slot.id);
     }
+    const emAndamentoAgora = estado.emAndamentoPorSlot.get(slot.id) ?? 0;
+    totalEmAndamentoAgora += emAndamentoAgora;
+
     return {
       id: slot.id,
       provedor: slot.provedor,
       modelo: slot.modelo,
       status: (emCooldown ? 'EM_COOLDOWN' : 'DISPONIVEL') as 'DISPONIVEL' | 'EM_COOLDOWN',
+      emAndamentoAgora,
       cooldownSegundosRestantes:
         emCooldown && cd ? Math.max(1, Math.ceil((cd.ate - agora) / 1000)) : 0,
       ...(emCooldown && cd ? { motivoCooldown: cd.motivo } : {}),
@@ -717,6 +783,7 @@ export function obterStatusPoolIA(): StatusPoolIA {
     totalSlotsConfigurados: slots.length,
     slotsDisponiveisAgora: disponiveis.length,
     slotsEmCooldown: detalhesSlots.length - disponiveis.length,
+    totalEmAndamentoAgora,
     totalRequisicoes: estado.totalRequisicoes,
     totalFailovers: estado.totalFailovers,
     ultimoUso: estado.ultimoUso,

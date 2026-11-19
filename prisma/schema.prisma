@@ -190,3 +190,16 @@ model Usuario {
   criadoEm      DateTime     @default(now())
   atualizadoEm  DateTime     @updatedAt
 }
+
+model CacheAnaliseIA {
+  id           String   @id @default(cuid())
+  hashConteudo String   @unique // Issue #77: SHA-256 do tipo + contexto limpo
+  tipo         String   // ANALISE_PUBLICACAO | PRE_MINUTA | RAG_CHAT
+  provedorIA   String
+  modeloIA     String?
+  respostaJson String
+  hits         Int      @default(1)
+  expiraEm     DateTime
+  criadoEm     DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+}
