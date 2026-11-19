@@ -201,6 +201,62 @@ export function gerarEspecificacaoOpenApi(baseUrl = 'http://localhost:3000') {
       '/api/exportar/backup': {
         get: { tags: ['Alertas, Crons & Exportação'], summary: 'Backup completo JSON Zero Lock-in (com ?lgpd=true)', responses: { '200': { description: 'application/json' } } },
       },
+      '/api/processo-360': {
+        get: {
+          tags: ['Fase 13 — B2B Avançado & Compliance'],
+          summary: 'Visão 360º Unificada (DJEN + Datajud + PDFs + Prazos + IA) com modo=cache vs tempo_real (#84)',
+          parameters: [
+            { name: 'numeroProcesso', in: 'query', required: true, schema: { type: 'string' } },
+            { name: 'modo', in: 'query', schema: { type: 'string', enum: ['cache', 'tempo_real'] } },
+          ],
+          responses: { '200': { description: 'Dossiê 360º completo do processo' } },
+        },
+      },
+      '/api/due-diligence': {
+        post: {
+          tags: ['Fase 13 — B2B Avançado & Compliance'],
+          summary: 'Compliance / KYC / Background Check com Score de Risco Jurídico (0-100) por CPF/CNPJ/Raiz (#86)',
+          responses: { '200': { description: 'Score de risco, esferas e passivo estimado' } },
+        },
+      },
+      '/api/lote/consultar': {
+        post: {
+          tags: ['Fase 13 — B2B Avançado & Compliance'],
+          summary: 'Consulta e monitoramento assíncrono em lote (até 500 processos/CNPJs) com callback (#87)',
+          responses: { '200': { description: 'Job criado ou processado' } },
+        },
+      },
+      '/api/lote/{id}': {
+        get: {
+          tags: ['Fase 13 — B2B Avançado & Compliance'],
+          summary: 'Consulta status e resultados de um JobLoteConsulta (#87)',
+          responses: { '200': { description: 'Progresso e resultados do lote' } },
+        },
+      },
+      '/api/webhooks/replay': {
+        post: {
+          tags: ['Fase 13 — B2B Avançado & Compliance'],
+          summary: 'Replay idempotente (X-Radar-Event-Id) de webhooks que falharam (#83)',
+          responses: { '200': { description: 'Resumo do reprocessamento' } },
+        },
+      },
+      '/api/regras': {
+        get: {
+          tags: ['Fase 13 — B2B Avançado & Compliance'],
+          summary: 'Lista regras No-Code de automação e roteamento (#90)',
+          responses: { '200': { description: 'Lista de RegraAutomacao' } },
+        },
+        post: {
+          tags: ['Fase 13 — B2B Avançado & Compliance'],
+          summary: 'Cria regra No-Code ou avalia evento com ?avaliar=true (#90)',
+          responses: { '201': { description: 'Regra criada ou acionada' } },
+        },
+        delete: {
+          tags: ['Fase 13 — B2B Avançado & Compliance'],
+          summary: 'Remove regra No-Code (#90)',
+          responses: { '200': { description: 'Regra removida' } },
+        },
+      },
     },
   };
 }

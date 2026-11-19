@@ -1,0 +1,51 @@
+{
+  "name": "Radar Jurídico — Alerta Crítico HMAC -> Processo 360 -> WhatsApp / Slack",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "radar-juridico-alerta",
+        "responseMode": "onReceived"
+      },
+      "name": "Webhook Radar Jurídico (X-Radar-Event-Id)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:3000/api/processo-360",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "numeroProcesso",
+              "value": "={{$json[\"alertas\"][0][\"numeroProcesso\"]}}"
+            },
+            {
+              "name": "modo",
+              "value": "cache"
+            }
+          ]
+        }
+      },
+      "name": "Enriquecer Processo 360 + IA",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [520, 300]
+    }
+  ],
+  "connections": {
+    "Webhook Radar Jurídico (X-Radar-Event-Id)": {
+      "main": [
+        [
+          {
+            "node": "Enriquecer Processo 360 + IA",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

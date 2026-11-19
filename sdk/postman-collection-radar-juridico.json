@@ -1,0 +1,65 @@
+{
+  "info": {
+    "name": "Radar Jurídico — Coleção Oficial B2B (Postman / Insomnia)",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Visão 360º do Processo (Hot Storage / Tempo Real)",
+      "request": {
+        "method": "GET",
+        "url": "{{baseUrl}}/api/processo-360?numeroProcesso=50099269520204047201&modo=cache"
+      }
+    },
+    {
+      "name": "Due Diligence & Score de Risco Jurídico (KYC)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/due-diligence",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nome\": \"LG ELECTRONICS\",\n  \"consultarDjenAoVivo\": false\n}"
+        }
+      }
+    },
+    {
+      "name": "Consulta em Lote / Batch (Até 500 Processos/CNPJs)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/lote/consultar",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"tipo\": \"PROCESSOS\",\n  \"itens\": [\"50099269520204047201\"]\n}"
+        }
+      }
+    },
+    {
+      "name": "Replay de Webhooks Falhos (Idempotente via X-Radar-Event-Id)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/webhooks/replay",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"limite\": 20\n}"
+        }
+      }
+    },
+    {
+      "name": "Motor de Regras No-Code (Criar Regra)",
+      "request": {
+        "method": "POST",
+        "url": "{{baseUrl}}/api/regras",
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"nome\": \"Sentença TRT4 Acima de R$ 50 mil\",\n  \"condTribunal\": \"TRT4\",\n  \"condValorMinRS\": 50000,\n  \"condTipoAto\": \"Sentença\",\n  \"acaoGerarMinuta\": true\n}"
+        }
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:3000"
+    }
+  ]
+}

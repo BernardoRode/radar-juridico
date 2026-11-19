@@ -135,7 +135,7 @@ O **Radar Jurídico** não é apenas um buscador passivo de Diário Oficial. Ele
 
 ## 5. 🏠 Handoff Exato para o Agente do PC de Casa (Estado Atual & Próximos Passos)
 
-### O que já está 100% implementado e fechado no código (`#1`–`#65`, `#69`, `#71`, `#73`, `#75`, `#76`, `#77`, `#78`, `#79`, `#80`):
+### O que já está 100% implementado e fechado no código (`#1`–`#65`, `#69`, `#71`, `#73`, `#75`, `#76`, `#77`, `#78`, `#79`, `#80`, `#81`–`#90`):
 - **Pool Multi-IA Gratuito com Ciclo, Failover & Concorrência (`src/lib/ia-router.ts`):** suporta 10 provedores gratuitos (`GEMINI`, `GROQ`, `CEREBRAS`, `OPENROUTER`, `MISTRAL`, `NVIDIA`, `HUGGINGFACE`, `CLOUDFLARE`, `COHERE`, `OLLAMA` + `OPENAI`), distribuição paralela *Least-Loaded Round-Robin* (`#76`), cooldown automático em HTTP 429 e roteamento `LEVE` vs `FORTE`.
 - **Economia de Tokens (`src/lib/ia-cache.ts` + `CacheAnaliseIA`):** Cache SHA-256 de análises/minutas e *Context Pruning* removendo ruídos do DJEN/PJe (`#77`).
 - **Memória Coletiva Anonimizada LGPD (`src/lib/memoria-coletiva.ts` + `/api/ia/memoria-coletiva`):** `PerfilColetivoVara` e `ModeloMinutaValidada` sem nomes/CPFs/CNJs (`#78`).

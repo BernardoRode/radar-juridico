@@ -1,3 +1,16 @@
+import { normalizarItensPorPaginaDjen } from '@/lib/djen';
+import { detectarFalhaParcialShardsDatajud } from '@/lib/datajud';
+import { gerarEventIdWebhook } from '@/lib/webhooks';
+import {
+  auditarAtrasoRemessaDjen,
+  calcularInicioPrazoCitacaoDjeRes569,
+} from '@/lib/auto-update';
+import {
+  deveBloquearLlmExternaPorSigilo,
+  mascararDadosSensiveisPii,
+  restaurarDadosSensiveisPii,
+} from '@/lib/pii-vault';
+import { avaliarRegraAutomacaoEmItem } from '@/lib/regras-automacao';
 import { describe, expect, it, vi, afterEach } from 'vitest';
 import {
   calcularLimiteConfirmacaoDomicilio,
@@ -361,5 +374,98 @@ describe('Memória Coletiva LGPD (#78), Multi-Tenant API Keys (#79/#80) e OpenAP
     expect(spec.paths['/api/ia/memoria-coletiva']).toBeDefined();
     expect(spec.paths['/api/api-keys']).toBeDefined();
     expect(Object.keys(spec.paths).length).toBeGreaterThanOrEqual(20);
+  });
+});
+
+
+describe('Fase 13 — Blindagem DJEN/Datajud, Webhooks Replay, Res. CNJ 569/2024, PII Vault & Regras No-Code (#81-#90)', () => {
+  it('trava itensPorPagina do DJEN em no máximo 50 itens (#81)', () => {
+    expect(normalizarItensPorPaginaDjen(200)).toBe(50);
+    expect(normalizarItensPorPaginaDjen('100')).toBe(50);
+    expect(normalizarItensPorPaginaDjen('15')).toBe(15);
+    expect(normalizarItensPorPaginaDjen(undefined)).toBe(25);
+  });
+
+  it('detecta falha silenciosa de shards no Elasticsearch do Datajud (_shards.failed > 0) (#82)', () => {
+    expect(detectarFalhaParcialShardsDatajud({ _shards: { total: 5, successful: 3, failed: 2 } })).toEqual({
+      parcial: true,
+      falhos: 2,
+      total: 5,
+    });
+    expect(detectarFalhaParcialShardsDatajud({ _shards: { total: 5, successful: 5, failed: 0 } })).toEqual({
+      parcial: false,
+      falhos: 0,
+      total: 5,
+    });
+  });
+
+  it('gera X-Radar-Event-Id determinístico para idempotência de webhooks (#83)', () => {
+    const id1 = gerarEventIdWebhook('ALERTA_URGENCIA_ALTA', '{"proc":"123"}');
+    const id2 = gerarEventIdWebhook('ALERTA_URGENCIA_ALTA', '{"proc":"123"}');
+    const id3 = gerarEventIdWebhook('ALERTA_URGENCIA_ALTA', '{"proc":"456"}');
+    expect(id1).toMatch(/^evt_[0-9a-f]{24}$/);
+    expect(id1).toBe(id2);
+    expect(id1).not.toBe(id3);
+  });
+
+  it('calcula regra dos 5 dias úteis pós-confirmação DJE e audita atraso de remessa PJe vs DJEN (Res. CNJ 569/2024 - #85)', () => {
+    const res569 = calcularInicioPrazoCitacaoDjeRes569('2026-08-03', 15, 'TJRS');
+    expect(res569?.dataInicioContagem).toBe('10/08/2026');
+    expect(res569?.regraAplicada).toContain('Res. CNJ 569/2024');
+
+    const atraso = auditarAtrasoRemessaDjen('2026-11-10', '2026-11-14');
+    expect(atraso?.diasAtrasoRemessa).toBe(4);
+    expect(atraso?.alertaAtraso).toContain('Atraso de 4 dia(s)');
+  });
+
+  it('mascara e restaura CPF/CNPJ/e-mail no PII Vault e bloqueia LLM externa em Segredo de Justiça (#88)', () => {
+    const original = 'O autor CPF 111.222.333-44 e ré CNPJ 12.345.678/0001-99 (contato@empresa.com.br) firmaram acordo.';
+    const { textoMascarado, mapaReversao, totalMascarados } = mascararDadosSensiveisPii(original);
+    expect(totalMascarados).toBe(3);
+    expect(textoMascarado).not.toContain('111.222.333-44');
+    expect(textoMascarado).not.toContain('12.345.678/0001-99');
+    expect(textoMascarado).not.toContain('contato@empresa.com.br');
+    expect(textoMascarado).toContain('[CPF_PII_1]');
+    expect(textoMascarado).toContain('[CNPJ_PII_1]');
+    expect(textoMascarado).toContain('[EMAIL_PII_1]');
+
+    const restaurado = restaurarDadosSensiveisPii(
+      'Resumo: acordo entre [CPF_PII_1] e [CNPJ_PII_1] ([EMAIL_PII_1]).',
+      mapaReversao
+    );
+    expect(restaurado).toBe(
+      'Resumo: acordo entre 111.222.333-44 e 12.345.678/0001-99 (contato@empresa.com.br).'
+    );
+
+    expect(deveBloquearLlmExternaPorSigilo(1, 'Despacho comum')).toBe(true);
+    expect(deveBloquearLlmExternaPorSigilo(0, 'Processo em segredo de justiça')).toBe(true);
+    expect(deveBloquearLlmExternaPorSigilo(0, 'Despacho público normal')).toBe(false);
+  });
+
+  it('avalia corretamente regras No-Code de automação por tribunal, valor e tipo de ato (#90)', () => {
+    const regra = {
+      condTribunal: 'TRT4',
+      condValorMinRS: 50000,
+      condTipoAto: 'Sentença',
+      condUrgencia: 'ALTA',
+    };
+    expect(
+      avaliarRegraAutomacaoEmItem(regra, {
+        tribunal: 'TRT4',
+        valorRS: 80000,
+        tipoAto: 'Sentença Condenatória',
+        urgencia: 'ALTA',
+        statusConcorrencia: 'NOSSO_ESCRITORIO',
+      })
+    ).toBe(true);
+    expect(
+      avaliarRegraAutomacaoEmItem(regra, {
+        tribunal: 'TRT4',
+        valorRS: 12000,
+        tipoAto: 'Sentença Condenatória',
+        urgencia: 'ALTA',
+        statusConcorrencia: 'NOSSO_ESCRITORIO',
+      })
+    ).toBe(false);
   });
 });
