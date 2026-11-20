@@ -546,3 +546,34 @@ Issues levantadas a partir de reclamações reais de advogados, Legal Ops e dese
 
 ### Issue #100: [Transparência Radical] Página Pública /status com Uptime Histórico 30 Dias por Tribunal e Latência
 - **Status:** 📋 Aberta no GitHub ([#100](https://github.com/BernardoRode/radar-juridico/issues/100))
+
+
+---
+
+## Fase 15: Engenharia Profunda de API B2B (TPU CNJ, Tema 1.180 STJ, Circuit Breaker & Precatórios #101–#108)
+
+Issues técnicas levantadas a partir de gargalos profundos de APIs jurídicas (DataJud SGT/TPU, duplicidade Portal vs. DJEN, latência em cascata, validação matemática e reconciliação de eventos):
+
+### Issue #101: [Deduplicação & Tema 1.180 STJ] Unificar Intimação Portal vs. DJEN e Prevalência de Prazo
+- **Status:** 📋 Aberta no GitHub ([#101](https://github.com/BernardoRode/radar-juridico/issues/101))
+
+### Issue #102: [Normalização TPU CNJ] Mapeador Canônico de Movimentos Datajud (SGT/TPU + Complementos Tabelados)
+- **Status:** 📋 Aberta no GitHub ([#102](https://github.com/BernardoRode/radar-juridico/issues/102))
+
+### Issue #103: [Circuit Breaker por Tribunal] Proteção Contra Efeito Cascata + Fallback Automático em Cache L2
+- **Status:** 📋 Aberta no GitHub ([#103](https://github.com/BernardoRode/radar-juridico/issues/103))
+
+### Issue #104: [Sanitização & Polo Padronizado] Validador Matemático CPF/CNPJ/CNJ (Dígito Verificador) e Polo Canônico
+- **Status:** 📋 Aberta no GitHub ([#104](https://github.com/BernardoRode/radar-juridico/issues/104))
+
+### Issue #105: [Ordenação & Reconciliação de Eventos] Sequence Number em Webhooks + Endpoint GET /api/eventos/reconciliar
+- **Status:** 📋 Aberta no GitHub ([#105](https://github.com/BernardoRode/radar-juridico/issues/105))
+
+### Issue #106: [API de Precatórios & RPVs Estruturada] Endpoint GET /api/precatorios com Natureza, Ente Devedor e Valor
+- **Status:** 📋 Aberta no GitHub ([#106](https://github.com/BernardoRode/radar-juridico/issues/106))
+
+### Issue #107: [Explicabilidade de Prazo] Retornar Regra Jurídica Aplicada + Memória de Cálculo Passo a Passo no JSON
+- **Status:** 📋 Aberta no GitHub ([#107](https://github.com/BernardoRode/radar-juridico/issues/107))
+
+### Issue #108: [Sobrestamento & Temas Vinculantes] Alerta Automático de Processo Suspenso por Tema STF/STJ/TST (TPU 11025)
+- **Status:** 📋 Aberta no GitHub ([#108](https://github.com/BernardoRode/radar-juridico/issues/108))
