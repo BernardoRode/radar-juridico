@@ -365,7 +365,7 @@ As 65 issues originais do código local (#1 a #65) estão concluídas e fechadas
 - **Objetivo:** Criar instância PostgreSQL gerenciada (Neon/Supabase), migrar `prisma/schema.prisma` de `sqlite` para `postgresql`, gerar `prisma/migrations/` e validar persistência em rede.
 
 ### Issue #67: [API de IA] Configurar Chaves Gratuitas do Pool Multi-IA no `.env` (PC de Casa) e Validar LLM Real
-- **Status:** 🟡 Em andamento — Roteador Multi-IA Gratuito já implementado em [ia-router.ts](file:///C:/Users/bernardo.rode/.gemini/antigravity/scratch/radar-juridico/src/lib/ia-router.ts) ([#67](https://github.com/BernardoRode/radar-juridico/issues/67))
+- **Status:** ? Conclu?do (5 provedores ativos / 32 slots no Pool Multi-IA: GEMINI, GROQ, OPENROUTER, NVIDIA, HUGGINGFACE) ([#67](https://github.com/BernardoRode/radar-juridico/issues/67))
 - **Prioridade:** P0 (Pendente gerar chaves gratuitas no PC de casa)
 - **Objetivo:** Gerar chaves gratuitas sem cartão (Google AI Studio / Gemini, Groq, Cloudflare Workers AI, OpenRouter `:free`, NVIDIA NIM, Cerebras, Mistral, Hugging Face, Cohere ou Ollama local), colar no `.env` e validar modo LLM real em `/api/ia/analisar`, `/api/ia/minuta`, `/api/ia/chat-base` (RAG) e OCR multimodal de PDFs escaneados.
 
