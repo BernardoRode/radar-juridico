@@ -380,7 +380,7 @@ As 65 issues originais do código local (#1 a #65) estão concluídas e fechadas
 - **Objetivo:** Gerar segredos criptográficos reais (`JWT_SECRET`, `CRON_SECRET`, `WEBHOOK_HMAC_SECRET`, `API_ACCESS_KEY`), adicionar login real com cookie `HttpOnly`, middleware e ativar `ENFORCE_AUTH="true"`.
 
 ### Issue #70: [Notificações Externas] Configurar Canal Real de Alertas (WhatsApp / Slack / E-mail Resend)
-- **Status:** 📋 Aberta no GitHub ([#70](https://github.com/BernardoRode/radar-juridico/issues/70))
+- **Status:** ? Conclu?do (Resend E-mail configurado e validado com HTTP 200 em `LogEntregaWebhook`) ([#70](https://github.com/BernardoRode/radar-juridico/issues/70))
 - **Prioridade:** P1 (Alta)
 - **Objetivo:** Conectar ao menos um serviço externo real (Resend E-mail, Evolution API/n8n para WhatsApp ou Slack Incoming Webhook) e validar entregas em `LogEntregaWebhook`.
 
