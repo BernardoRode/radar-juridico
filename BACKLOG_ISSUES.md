@@ -527,7 +527,7 @@ Issues levantadas a partir de reclamações reais de advogados, Legal Ops e dese
 - **Status:** 📋 Aberta no GitHub ([#93](https://github.com/BernardoRode/radar-juridico/issues/93))
 
 ### Issue #94: [Migração Zero-Código] Adaptador Compatível Loy Legal (?formato=loy) para Clientes Migrando de API
-- **Status:** 📋 Aberta no GitHub ([#94](https://github.com/BernardoRode/radar-juridico/issues/94))
+- **Status:** ?? Descartada (manter padr?o ?nico nativo da API) ([#94](https://github.com/BernardoRode/radar-juridico/issues/94))
 
 ### Issue #95: [Legal Ops Pré-Processual] Ingestão de Reclamações (Procon / Consumidor.gov / Reclame Aqui) via API/Webhook
 - **Status:** 📋 Aberta no GitHub ([#95](https://github.com/BernardoRode/radar-juridico/issues/95))
