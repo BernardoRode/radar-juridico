@@ -360,7 +360,7 @@ Varredura complementar das críticas de advogados em redes sociais e avaliaçõe
 As 65 issues originais do código local (#1 a #65) estão concluídas e fechadas no GitHub (CI verde). As 10 issues abaixo correspondem às **integrações externas, banco de dados em rede, chaves de API de terceiros, deploy, segurança de produção e melhorias pendentes**:
 
 ### Issue #66: [Infra / Banco em Rede] Criar PostgreSQL na Nuvem (Neon / Supabase) e Migrar Prisma de SQLite
-- **Status:** 📋 Aberta no GitHub ([#66](https://github.com/BernardoRode/radar-juridico/issues/66))
+- **Status:** 📋? Conclu?do ([#66](https://github.com/BernardoRode/radar-juridico/issues/66))
 - **Prioridade:** P0 (Crítica para deploy em nuvem)
 - **Objetivo:** Criar instância PostgreSQL gerenciada (Neon/Supabase), migrar `prisma/schema.prisma` de `sqlite` para `postgresql`, gerar `prisma/migrations/` e validar persistência em rede.
 
@@ -370,7 +370,7 @@ As 65 issues originais do código local (#1 a #65) estão concluídas e fechadas
 - **Objetivo:** Gerar chaves gratuitas sem cartão (Google AI Studio / Gemini, Groq, Cloudflare Workers AI, OpenRouter `:free`, NVIDIA NIM, Cerebras, Mistral, Hugging Face, Cohere ou Ollama local), colar no `.env` e validar modo LLM real em `/api/ia/analisar`, `/api/ia/minuta`, `/api/ia/chat-base` (RAG) e OCR multimodal de PDFs escaneados.
 
 ### Issue #68: [Deploy & Cron 24/7] Publicar na Vercel, Configurar Variáveis de Ambiente e Ativar Crons Reais
-- **Status:** 📋 Aberta no GitHub ([#68](https://github.com/BernardoRode/radar-juridico/issues/68))
+- **Status:** 📋? Conclu?do ([#68](https://github.com/BernardoRode/radar-juridico/issues/68))
 - **Prioridade:** P0 (Hoje roda apenas em localhost)
 - **Objetivo:** Conectar o repositório na Vercel, configurar todas as variáveis do `.env.example` e ativar os crons reais (`/api/cron/radar` a cada 4h e `/api/digest?disparar=true` às 08h BRT).
 
@@ -400,7 +400,7 @@ As 65 issues originais do código local (#1 a #65) estão concluídas e fechadas
 - **Objetivo:** Expor visualmente na aba Configurações os endpoints já prontos (`PATCH /api/config/advogados`, `GET /api/webhooks?logs=true`, `POST /api/compartilhar` para Portal do Cliente e badges/diagnóstico do Pool Multi-IA).
 
 ### Issue #74: [Escala Produção] Rate Limiting Distribuído (Upstash Redis) e Busca Semântica Vetorial (`pgvector`)
-- **Status:** 📋 Aberta no GitHub ([#74](https://github.com/BernardoRode/radar-juridico/issues/74))
+- **Status:** 📋? Conclu?do ([#74](https://github.com/BernardoRode/radar-juridico/issues/74))
 - **Prioridade:** P2 (Média)
 - **Objetivo:** Migrar `src/lib/rate-limit.ts` para Upstash Redis e ativar `pgvector` no PostgreSQL para embeddings vetoriais no RAG.
 
@@ -518,34 +518,34 @@ Levantamento aprofundado em fóruns (`r/direito`, `r/brdev`), Reclame Aqui e com
 Issues levantadas a partir de reclamações reais de advogados, Legal Ops e desenvolvedores contra Escavador, Digesto, Kurier, Loy Legal, Astrea, Projuris, ADVBOX, EasyJur e DataJud:
 
 ### Issue #91: [Busca CPF/CNPJ Completa] Indexação Histórica Local + Conectores Públicos por Documento
-- **Status:** 📋 Aberta no GitHub ([#91](https://github.com/BernardoRode/radar-juridico/issues/91))
+- **Status:** 📋? Conclu?do ([#91](https://github.com/BernardoRode/radar-juridico/issues/91))
 
 ### Issue #92: [Árvore Processual Cross-Grau] Vincular 1º Grau, 2º Grau (Recursos), STJ/TST e Cumprimento de Sentença
-- **Status:** 📋 Aberta no GitHub ([#92](https://github.com/BernardoRode/radar-juridico/issues/92))
+- **Status:** 📋? Conclu?do ([#92](https://github.com/BernardoRode/radar-juridico/issues/92))
 
 ### Issue #93: [Calendário Forense v2] Feriados Móveis (Carnaval/Paixão/Corpus Christi), Prazo em Dobro (Art. 229 CPC) e Suspensões
-- **Status:** 📋 Aberta no GitHub ([#93](https://github.com/BernardoRode/radar-juridico/issues/93))
+- **Status:** 📋? Conclu?do ([#93](https://github.com/BernardoRode/radar-juridico/issues/93))
 
 ### Issue #94: [Migração Zero-Código] Adaptador Compatível Loy Legal (?formato=loy) para Clientes Migrando de API
 - **Status:** ?? Descartada (manter padr?o ?nico nativo da API) ([#94](https://github.com/BernardoRode/radar-juridico/issues/94))
 
 ### Issue #95: [Legal Ops Pré-Processual] Ingestão de Reclamações (Procon / Consumidor.gov / Reclame Aqui) via API/Webhook
-- **Status:** 📋 Aberta no GitHub ([#95](https://github.com/BernardoRode/radar-juridico/issues/95))
+- **Status:** 📋? Conclu?do ([#95](https://github.com/BernardoRode/radar-juridico/issues/95))
 
 ### Issue #96: [E-Billing & Auditoria Legal Ops] Conferência Automática de Faturas de Bancas Terceirizadas (POST /api/legal-ops/auditar-fatura)
-- **Status:** 📋 Aberta no GitHub ([#96](https://github.com/BernardoRode/radar-juridico/issues/96))
+- **Status:** 📋? Conclu?do ([#96](https://github.com/BernardoRode/radar-juridico/issues/96))
 
 ### Issue #97: [Tempo Real & DLQ] Stream SSE (/api/eventos/stream) e Dead-Letter Queue para Webhooks
-- **Status:** 📋 Aberta no GitHub ([#97](https://github.com/BernardoRode/radar-juridico/issues/97))
+- **Status:** 📋? Conclu?do ([#97](https://github.com/BernardoRode/radar-juridico/issues/97))
 
 ### Issue #98: [Atualização Monetária Automática] Simulador SELIC / IPCA-E / Juros Trabalhistas (ADC 58 STF) no Passivo
-- **Status:** 📋 Aberta no GitHub ([#98](https://github.com/BernardoRode/radar-juridico/issues/98))
+- **Status:** 📋? Conclu?do ([#98](https://github.com/BernardoRode/radar-juridico/issues/98))
 
 ### Issue #99: [Self-Service B2B Sem Fidelidade] Metering Transparente (Headers X-Quota-*) e Planos Pay-as-you-go
-- **Status:** 📋 Aberta no GitHub ([#99](https://github.com/BernardoRode/radar-juridico/issues/99))
+- **Status:** 📋? Conclu?do ([#99](https://github.com/BernardoRode/radar-juridico/issues/99))
 
 ### Issue #100: [Transparência Radical] Página Pública /status com Uptime Histórico 30 Dias por Tribunal e Latência
-- **Status:** 📋 Aberta no GitHub ([#100](https://github.com/BernardoRode/radar-juridico/issues/100))
+- **Status:** 📋? Conclu?do ([#100](https://github.com/BernardoRode/radar-juridico/issues/100))
 
 
 ---
@@ -555,25 +555,25 @@ Issues levantadas a partir de reclamações reais de advogados, Legal Ops e dese
 Issues técnicas levantadas a partir de gargalos profundos de APIs jurídicas (DataJud SGT/TPU, duplicidade Portal vs. DJEN, latência em cascata, validação matemática e reconciliação de eventos):
 
 ### Issue #101: [Deduplicação & Tema 1.180 STJ] Unificar Intimação Portal vs. DJEN e Prevalência de Prazo
-- **Status:** 📋 Aberta no GitHub ([#101](https://github.com/BernardoRode/radar-juridico/issues/101))
+- **Status:** 📋? Conclu?do ([#101](https://github.com/BernardoRode/radar-juridico/issues/101))
 
 ### Issue #102: [Normalização TPU CNJ] Mapeador Canônico de Movimentos Datajud (SGT/TPU + Complementos Tabelados)
-- **Status:** 📋 Aberta no GitHub ([#102](https://github.com/BernardoRode/radar-juridico/issues/102))
+- **Status:** 📋? Conclu?do ([#102](https://github.com/BernardoRode/radar-juridico/issues/102))
 
 ### Issue #103: [Circuit Breaker por Tribunal] Proteção Contra Efeito Cascata + Fallback Automático em Cache L2
-- **Status:** 📋 Aberta no GitHub ([#103](https://github.com/BernardoRode/radar-juridico/issues/103))
+- **Status:** 📋? Conclu?do ([#103](https://github.com/BernardoRode/radar-juridico/issues/103))
 
 ### Issue #104: [Sanitização & Polo Padronizado] Validador Matemático CPF/CNPJ/CNJ (Dígito Verificador) e Polo Canônico
-- **Status:** 📋 Aberta no GitHub ([#104](https://github.com/BernardoRode/radar-juridico/issues/104))
+- **Status:** 📋? Conclu?do ([#104](https://github.com/BernardoRode/radar-juridico/issues/104))
 
 ### Issue #105: [Ordenação & Reconciliação de Eventos] Sequence Number em Webhooks + Endpoint GET /api/eventos/reconciliar
-- **Status:** 📋 Aberta no GitHub ([#105](https://github.com/BernardoRode/radar-juridico/issues/105))
+- **Status:** 📋? Conclu?do ([#105](https://github.com/BernardoRode/radar-juridico/issues/105))
 
 ### Issue #106: [API de Precatórios & RPVs Estruturada] Endpoint GET /api/precatorios com Natureza, Ente Devedor e Valor
-- **Status:** 📋 Aberta no GitHub ([#106](https://github.com/BernardoRode/radar-juridico/issues/106))
+- **Status:** 📋? Conclu?do ([#106](https://github.com/BernardoRode/radar-juridico/issues/106))
 
 ### Issue #107: [Explicabilidade de Prazo] Retornar Regra Jurídica Aplicada + Memória de Cálculo Passo a Passo no JSON
-- **Status:** 📋 Aberta no GitHub ([#107](https://github.com/BernardoRode/radar-juridico/issues/107))
+- **Status:** 📋? Conclu?do ([#107](https://github.com/BernardoRode/radar-juridico/issues/107))
 
 ### Issue #108: [Sobrestamento & Temas Vinculantes] Alerta Automático de Processo Suspenso por Tema STF/STJ/TST (TPU 11025)
-- **Status:** 📋 Aberta no GitHub ([#108](https://github.com/BernardoRode/radar-juridico/issues/108))
+- **Status:** 📋? Conclu?do ([#108](https://github.com/BernardoRode/radar-juridico/issues/108))

@@ -180,5 +180,14 @@ export interface DadosDatajud {
   origemCache?: boolean;
   respostaParcialShards?: boolean; // Issue #82: Detecta _shards.failed > 0 no Elasticsearch do Datajud
   shardsFalhos?: number;
+  tribunalDegradado?: boolean; // Issue #103: Circuit Breaker aberto para o tribunal
+  resumoTpu?: {
+    marcoCanonicoAtual: string;
+    sobrestado: boolean;
+    temaSobrestamento?: string;
+    mudancaClasseDetectada: boolean;
+    arquivadoDefinitivo: boolean;
+    totalMeroExpedienteTpu: number;
+  };
   mensagem?: string;
 }

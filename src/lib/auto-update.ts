@@ -65,12 +65,48 @@ export function ehRecessoForenseArt220CPC(d: Date): boolean {
   return false;
 }
 
+/**
+ * Issue #93: Calcula o Domingo de Páscoa (algoritmo de Meeus/Jones/Butcher) para feriados móveis forenses:
+ * Carnaval (Seg/Ter: -48/-47 dias), Sexta-Feira Santa (-2 dias) e Corpus Christi (+60 dias).
+ */
+export function calcularDomingoPascoaUtc(ano: number): Date {
+  const a = ano % 19;
+  const b = Math.floor(ano / 100);
+  const c = ano % 100;
+  const d = Math.floor(b / 4);
+  const e = b % 4;
+  const f = Math.floor((b + 8) / 25);
+  const g = Math.floor((b - f + 1) / 3);
+  const h = (19 * a + b - d - g + 15) % 30;
+  const i = Math.floor(c / 4);
+  const k = c % 4;
+  const l = (32 + 2 * e + 2 * i - h - k) % 7;
+  const m = Math.floor((a + 11 * h + 22 * l) / 451);
+  const mes = Math.floor((h + l - 7 * m + 114) / 31); // 3=Março, 4=Abril
+  const dia = ((h + l - 7 * m + 114) % 31) + 1;
+  return new Date(Date.UTC(ano, mes - 1, dia));
+}
+
+export function obterFeriadosMoveisAno(ano: number): Set<string> {
+  const pascoa = calcularDomingoPascoaUtc(ano).getTime();
+  const offsets = [-48, -47, -2, 60]; // Seg/Ter Carnaval, Sexta-Feira Santa, Corpus Christi
+  const set = new Set<string>();
+  for (const off of offsets) {
+    const dt = new Date(pascoa + off * 86400000);
+    const mm = String(dt.getUTCMonth() + 1).padStart(2, '0');
+    const dd = String(dt.getUTCDate()).padStart(2, '0');
+    set.add(`${mm}-${dd}`);
+  }
+  return set;
+}
+
 export function ehFeriadoForense(d: Date, siglaTribunal?: string): boolean {
   const mm = String(d.getUTCMonth() + 1).padStart(2, '0');
   const dd = String(d.getUTCDate()).padStart(2, '0');
   const chave = `${mm}-${dd}`;
 
   if (FERIADOS_FIXOS_MMDD.has(chave)) return true;
+  if (obterFeriadosMoveisAno(d.getUTCFullYear()).has(chave)) return true;
 
   const uf = extrairUfDoTribunal(siglaTribunal);
   if (uf && FERIADOS_POR_UF[uf]?.includes(chave)) return true;
@@ -206,6 +242,14 @@ export interface CalculoPrazoFatal {
   dataFatalFormatada: string;
   prazoInternoD2Formatado: string; // Issue #38: Dupla checagem Controladoria D-2
   diasRestantes: number;
+  memoriaCalculoPrazo?: {
+    dataDisponibilizacao: string;
+    dataPublicacao: string;
+    diasContados: number;
+    prazoEmDobroAplicado: boolean;
+    feriadosOuRecessoPulados: string[];
+    regraLegal: string;
+  };
 }
 
 /**
@@ -215,7 +259,8 @@ export interface CalculoPrazoFatal {
 export function calcularPrazoFatal(
   dataDisponibilizacao?: string,
   prazoDetectado?: string,
-  siglaTribunal?: string
+  siglaTribunal?: string,
+  opcoes?: { prazoEmDobro?: boolean }
 ): CalculoPrazoFatal | undefined {
   if (!dataDisponibilizacao || !prazoDetectado) return undefined;
 
@@ -231,9 +276,10 @@ export function calcularPrazoFatal(
   // Dia da publicação = 1º dia útil forense seguinte à disponibilização
   const dataPublicacao = avancarDiasUteisForenses(dataDisp, 1, siglaTribunal);
 
-  const diasParaAvancar = ehHoras
+  const fatorDobro = opcoes?.prazoEmDobro ? 2 : 1;
+  const diasParaAvancar = (ehHoras
     ? Math.max(1, Math.ceil(quantidade / 24))
-    : quantidade;
+    : quantidade) * fatorDobro;
 
   const dataFatal = avancarDiasUteisForenses(
     dataPublicacao,
@@ -257,11 +303,33 @@ export function calcularPrazoFatal(
     (dataFatal.getTime() - hojeZero) / (1000 * 60 * 60 * 24)
   );
 
+  const feriadosOuRecessoPulados: string[] = [];
+  const cursorMem = new Date(dataDisp.getTime());
+  while (cursorMem.getTime() < dataFatal.getTime()) {
+    cursorMem.setUTCDate(cursorMem.getUTCDate() + 1);
+    if (
+      !ehFimDeSemana(cursorMem) &&
+      (ehRecessoForenseArt220CPC(cursorMem) || ehFeriadoForense(cursorMem, siglaTribunal))
+    ) {
+      feriadosOuRecessoPulados.push(formatarDataBr(cursorMem));
+    }
+  }
+
   return {
     dataFatalISO: formatarDataIso(dataFatal),
     dataFatalFormatada: formatarDataBr(dataFatal),
     prazoInternoD2Formatado: formatarDataBr(dataInternaD2),
     diasRestantes,
+    memoriaCalculoPrazo: {
+      dataDisponibilizacao: formatarDataBr(dataDisp),
+      dataPublicacao: formatarDataBr(dataPublicacao),
+      diasContados: diasParaAvancar,
+      prazoEmDobroAplicado: Boolean(opcoes?.prazoEmDobro),
+      feriadosOuRecessoPulados,
+      regraLegal: opcoes?.prazoEmDobro
+        ? 'Art. 219/220/224 CPC c/c Prazo em Dobro (Art. 183/186/229 CPC).'
+        : 'Art. 219/220/224 CPC + Feriados Nacionais, Móveis e Estaduais.',
+    },
   };
 }
 

@@ -11,7 +11,7 @@ import {
   restaurarDadosSensiveisPii,
 } from '@/lib/pii-vault';
 import { avaliarRegraAutomacaoEmItem } from '@/lib/regras-automacao';
-import { describe, expect, it, vi, afterEach } from 'vitest';
+import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest';
 import {
   calcularLimiteConfirmacaoDomicilio,
   calcularPrazoFatal,
@@ -205,6 +205,16 @@ describe('Segurança Anti-SSRF, Datajud & JWT RBAC', () => {
 });
 
 describe('Roteador Multi-IA Gratuito com Ciclo & Failover (ia-router.ts)', () => {
+  beforeEach(() => {
+    for (const k of [
+      'GEMINI_API_KEY', 'GROQ_API_KEY', 'CEREBRAS_API_KEY', 'OPENROUTER_API_KEY',
+      'NVIDIA_API_KEY', 'HUGGINGFACE_API_KEY', 'CLOUDFLARE_ACCOUNT_ID',
+      'CLOUDFLARE_API_TOKEN', 'COHERE_API_KEY', 'OLLAMA_BASE_URL', 'OPENAI_API_KEY',
+      'IA_ORDEM_PROVEDORES',
+    ]) {
+      delete process.env[k];
+    }
+  });
   const envBackup = { ...process.env };
 
   afterEach(() => {
@@ -467,5 +477,94 @@ describe('Fase 13 — Blindagem DJEN/Datajud, Webhooks Replay, Res. CNJ 569/2024
         statusConcorrencia: 'NOSSO_ESCRITORIO',
       })
     ).toBe(false);
+  });
+});
+
+import {
+  validarCpf,
+  validarCnpj,
+  validarNumeroCnjMod97,
+  normalizarPoloCanonico,
+} from '@/lib/validadores';
+import { analisarArvoreMovimentosTpu } from '@/lib/tpu-normalizer';
+import {
+  podeConsultarTribunal,
+  registrarFalhaTribunal,
+  registrarSucessoTribunal,
+} from '@/lib/circuit-breaker';
+import {
+  gerarChaveDeduplicacaoAto,
+  resolverPrevalenciaTema1180STJ,
+} from '@/lib/deduplicacao';
+import {
+  calcularDomingoPascoaUtc,
+  obterFeriadosMoveisAno,
+} from '@/lib/auto-update';
+
+describe('Fase 14 & 15 — Engenharia B2B: Feriados Móveis, Prazo em Dobro, TPU CNJ, Tema 1.180, Circuit Breaker & Validadores', () => {
+  it('calcula Páscoa e feriados móveis forenses e aplica prazo em dobro com memória de cálculo (#93, #107)', () => {
+    const pascoa2026 = calcularDomingoPascoaUtc(2026);
+    expect(pascoa2026.toISOString().slice(0, 10)).toBe('2026-04-05');
+    const moveis = obterFeriadosMoveisAno(2026);
+    expect(moveis.has('04-03')).toBe(true); // Sexta-Feira Santa 2026
+    expect(moveis.has('06-04')).toBe(true); // Corpus Christi 2026
+
+    const simples = calcularPrazoFatal('2026-06-01', '5 dias', 'TJSP');
+    const dobro = calcularPrazoFatal('2026-06-01', '5 dias', 'TJSP', { prazoEmDobro: true });
+    expect(simples?.memoriaCalculoPrazo?.diasContados).toBe(5);
+    expect(dobro?.memoriaCalculoPrazo?.diasContados).toBe(10);
+    expect(dobro?.memoriaCalculoPrazo?.prazoEmDobroAplicado).toBe(true);
+    expect(dobro?.memoriaCalculoPrazo?.feriadosOuRecessoPulados).toContain('04/06/2026');
+  });
+
+  it('valida matematicamente CPF, CNPJ e CNJ Módulo 97 e normaliza Polo Canônico (#104)', () => {
+    expect(validarNumeroCnjMod97('5009926-95.2020.4.04.7201')).toBe(true);
+    expect(validarNumeroCnjMod97('5009926-00.2020.4.04.7201')).toBe(false);
+    expect(validarCpf('111.111.111-11')).toBe(false);
+    expect(validarCnpj('11.222.333/0001-81')).toBe(true);
+    expect(validarCnpj('11.222.333/0001-00')).toBe(false);
+    expect(normalizarPoloCanonico('A')).toBe('ATIVO');
+    expect(normalizarPoloCanonico('Reclamado')).toBe('PASSIVO');
+    expect(normalizarPoloCanonico('Terceiro Interessado')).toBe('TERCEIRO');
+  });
+
+  it('normaliza árvore TPU CNJ e detecta sobrestamento (11025) e mudança de classe (10966) (#102, #108)', () => {
+    const resumo = analisarArvoreMovimentosTpu([
+      {
+        codigo: 11025,
+        nome: 'Suspensão ou Sobrestamento por Tema 1046 do STF',
+        dataHora: '2026-11-10T10:00:00Z',
+      },
+      {
+        codigo: 10966,
+        nome: 'Mudança de Classe Processual',
+        dataHora: '2026-10-01T10:00:00Z',
+      },
+    ]);
+    expect(resumo.marcoCanonicoAtual).toBe('SOBRESTAMENTO');
+    expect(resumo.sobrestado).toBe(true);
+    expect(resumo.temaSobrestamento).toMatch(/Tema 1046/i);
+    expect(resumo.mudancaClasseDetectada).toBe(true);
+  });
+
+  it('abre Circuit Breaker após 3 falhas consecutivas e fecha após sucesso (#103)', () => {
+    const chave = 'datajud:api_publica_teste';
+    registrarSucessoTribunal(chave);
+    expect(podeConsultarTribunal(chave).permitido).toBe(true);
+    registrarFalhaTribunal(chave, 'timeout');
+    registrarFalhaTribunal(chave, 'timeout');
+    registrarFalhaTribunal(chave, 'timeout');
+    expect(podeConsultarTribunal(chave).permitido).toBe(false);
+    registrarSucessoTribunal(chave);
+    expect(podeConsultarTribunal(chave).permitido).toBe(true);
+  });
+
+  it('gera chave de deduplicação e aplica prevalência do Tema 1.180 STJ (#101)', () => {
+    const k1 = gerarChaveDeduplicacaoAto('5009926-95.2020.4.04.7201', '2026-11-18', 'Intime-se a parte.');
+    const k2 = gerarChaveDeduplicacaoAto('50099269520204047201', '2026-11-18', 'intime-se   a parte.');
+    expect(k1).toBe(k2);
+    const tema = resolverPrevalenciaTema1180STJ({ houveIntimacaoPortal: true });
+    expect(tema.fontePrevalente).toBe('PORTAL_ELETRONICO');
+    expect(tema.prazoCienciaTacitaDiasCorridos).toBe(10);
   });
 });

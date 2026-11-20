@@ -1,3 +1,5 @@
+import { analisarArvoreMovimentosTpu } from '@/lib/tpu-normalizer';
+import { podeConsultarTribunal, registrarFalhaTribunal, registrarSucessoTribunal } from '@/lib/circuit-breaker';
 import { DadosDatajud, MovimentoDatajud } from '@/types/juridico';
 import { prisma } from '@/lib/prisma';
 
@@ -189,6 +191,19 @@ export async function consultarDatajudProcesso(
     };
   }
 
+  const circuito = podeConsultarTribunal(`datajud:${indice}`);
+  if (!circuito.permitido) {
+    return {
+      encontrado: false,
+      indiceConsultado: indice,
+      numeroProcesso: numLimpo,
+      assuntos: [],
+      totalMovimentos: 0,
+      movimentos: [],
+      tribunalDegradado: true,
+      mensagem: `Circuit Breaker aberto para ${indice} devido a instabilidades recentes. Tente novamente em instantes.`,
+    };
+  }
   const url = `https://api-publica.datajud.cnj.jus.br/${indice}/_search`;
 
   for (let tentativa = 0; tentativa < 2; tentativa++) {
@@ -284,6 +299,8 @@ export async function consultarDatajudProcesso(
         ? `${movProtocolo.nome} em ${(movProtocolo.dataHora || '').slice(0, 10)}`
         : undefined;
 
+      registrarSucessoTribunal(`datajud:${indice}`);
+      const resumoTpu = analisarArvoreMovimentosTpu(movimentosOrdenados);
       const resultadoFinal: DadosDatajud = {
         encontrado: true,
         indiceConsultado: indice,
