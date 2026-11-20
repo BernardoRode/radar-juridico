@@ -509,3 +509,40 @@ Levantamento aprofundado em fóruns (`r/direito`, `r/brdev`), Reclame Aqui e com
 - **Status:** ✅ Concluído ([#90](https://github.com/BernardoRode/radar-juridico/issues/90))
 - **Prioridade:** P2 (Média — resolve a crítica de rigidez de Astrea/Projuris/ADVBOX)
 - **Objetivo:** Criar tabela `RegraAutomacao` e CRUD `/api/regras` permitindo definir condições sem código (ex.: *SE tribunal = TRT4 E valor > R$ 50.000 E ato = Sentença → disparar Webhook Sócio + gerar pré-minuta automática*).
+
+
+---
+
+## Fase 14: Diferenciais Inéditos vs. Concorrentes (Pesquisa de Mercado, Fóruns & Reclame Aqui #91–#100)
+
+Issues levantadas a partir de reclamações reais de advogados, Legal Ops e desenvolvedores contra Escavador, Digesto, Kurier, Loy Legal, Astrea, Projuris, ADVBOX, EasyJur e DataJud:
+
+### Issue #91: [Busca CPF/CNPJ Completa] Indexação Histórica Local + Conectores Públicos por Documento
+- **Status:** 📋 Aberta no GitHub ([#91](https://github.com/BernardoRode/radar-juridico/issues/91))
+
+### Issue #92: [Árvore Processual Cross-Grau] Vincular 1º Grau, 2º Grau (Recursos), STJ/TST e Cumprimento de Sentença
+- **Status:** 📋 Aberta no GitHub ([#92](https://github.com/BernardoRode/radar-juridico/issues/92))
+
+### Issue #93: [Calendário Forense v2] Feriados Móveis (Carnaval/Paixão/Corpus Christi), Prazo em Dobro (Art. 229 CPC) e Suspensões
+- **Status:** 📋 Aberta no GitHub ([#93](https://github.com/BernardoRode/radar-juridico/issues/93))
+
+### Issue #94: [Migração Zero-Código] Adaptador Compatível Loy Legal (?formato=loy) para Clientes Migrando de API
+- **Status:** 📋 Aberta no GitHub ([#94](https://github.com/BernardoRode/radar-juridico/issues/94))
+
+### Issue #95: [Legal Ops Pré-Processual] Ingestão de Reclamações (Procon / Consumidor.gov / Reclame Aqui) via API/Webhook
+- **Status:** 📋 Aberta no GitHub ([#95](https://github.com/BernardoRode/radar-juridico/issues/95))
+
+### Issue #96: [E-Billing & Auditoria Legal Ops] Conferência Automática de Faturas de Bancas Terceirizadas (POST /api/legal-ops/auditar-fatura)
+- **Status:** 📋 Aberta no GitHub ([#96](https://github.com/BernardoRode/radar-juridico/issues/96))
+
+### Issue #97: [Tempo Real & DLQ] Stream SSE (/api/eventos/stream) e Dead-Letter Queue para Webhooks
+- **Status:** 📋 Aberta no GitHub ([#97](https://github.com/BernardoRode/radar-juridico/issues/97))
+
+### Issue #98: [Atualização Monetária Automática] Simulador SELIC / IPCA-E / Juros Trabalhistas (ADC 58 STF) no Passivo
+- **Status:** 📋 Aberta no GitHub ([#98](https://github.com/BernardoRode/radar-juridico/issues/98))
+
+### Issue #99: [Self-Service B2B Sem Fidelidade] Metering Transparente (Headers X-Quota-*) e Planos Pay-as-you-go
+- **Status:** 📋 Aberta no GitHub ([#99](https://github.com/BernardoRode/radar-juridico/issues/99))
+
+### Issue #100: [Transparência Radical] Página Pública /status com Uptime Histórico 30 Dias por Tribunal e Latência
+- **Status:** 📋 Aberta no GitHub ([#100](https://github.com/BernardoRode/radar-juridico/issues/100))
