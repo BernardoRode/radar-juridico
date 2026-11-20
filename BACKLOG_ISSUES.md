@@ -390,7 +390,7 @@ As 65 issues originais do código local (#1 a #65) estão concluídas e fechadas
 - **Objetivo:** Validar `DATAJUD_API_KEY` e testar captura ao vivo em processos reais nos tribunais do escritório (`TJRS`, `TRT4`, `TRF4`, `TJSP`), cache L2 (`CacheDatajud`), PJe, eproc e `LogSaudeTribunal`.
 
 ### Issue #72: [Onboarding Real] Cadastrar OABs do Escritório, Clientes Monitorados e Rodar Primeira Varredura Real
-- **Status:** 📋 Aberta no GitHub ([#72](https://github.com/BernardoRode/radar-juridico/issues/72))
+- **Status:** ? Conclu?do (5 OABs + 9 grupos de clientes/varia??es cadastrados, varredura real executada e `prontoParaUsoLocal: true`) ([#72](https://github.com/BernardoRode/radar-juridico/issues/72))
 - **Prioridade:** P1 (Alta)
 - **Objetivo:** Popular OABs reais (`AdvogadoEscritorio`) e clientes/variações/CNPJs (`ClienteMonitorado`), disparar primeira varredura real e validar `GET /api/config/status` (`prontoParaUsoLocal: true`).
 
