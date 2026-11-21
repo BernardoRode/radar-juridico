@@ -1,5 +1,6 @@
 import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
+import { publicarEventoTempoReal } from '@/lib/eventos-stream';
 
 export interface AlertaUrgenciaPayload {
   numeroProcesso: string;
@@ -230,6 +231,49 @@ export async function dispararWebhooksAlertaAlta(
           },
         })
         .catch(() => {});
+
+      if (!res.ok) {
+        // Issue #97: Move entrega com falha definitiva para Dead-Letter Queue (DLQ)
+        await prisma.deadLetterWebhook
+          .create({
+            data: {
+              organizacaoId: wh.organizacaoId ?? null,
+              webhookId: wh.id,
+              eventId: res.eventId,
+              canal: wh.canal,
+              urlDestino: wh.urlDestino,
+              evento,
+              payloadJson: bodyStr,
+              ultimoErro: res.erro || `HTTP ${res.httpStatus || 500}`,
+              httpStatus: res.httpStatus ?? null,
+              tentativasTotais: res.tentativasExecutadas,
+              status: 'PENDENTE',
+              proximoRetryEm: new Date(Date.now() + 15 * 60 * 1000),
+            },
+          })
+          .catch(() => {});
+
+        publicarEventoTempoReal({
+          tipo: 'WEBHOOK_DLQ',
+          organizacaoId: wh.organizacaoId,
+          dados: {
+            eventId: res.eventId,
+            canal: wh.canal,
+            urlDestino: wh.urlDestino,
+            erro: res.erro || `HTTP ${res.httpStatus}`,
+          },
+        });
+      } else {
+        publicarEventoTempoReal({
+          tipo: 'WEBHOOK_ENTREGUE',
+          organizacaoId: wh.organizacaoId,
+          dados: {
+            eventId: res.eventId,
+            canal: wh.canal,
+            evento,
+          },
+        });
+      }
     })
   );
 

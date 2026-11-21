@@ -3,6 +3,12 @@ import {
   ProcessoAutoGerido,
   ResultadoExtracaoDocumento,
 } from '@/types/juridico';
+import { indexarPartesDoProcesso } from '@/lib/indexador-partes';
+import {
+  detectarVinculosNoTexto,
+  registrarVinculosCrossGrau,
+} from '@/lib/arvore-cross-grau';
+import { publicarEventoTempoReal } from '@/lib/eventos-stream';
 
 /**
  * Retorna todas as OABs ativas cadastradas para o nosso escritório no banco de dados.
@@ -69,6 +75,31 @@ export async function salvarRadarNoBanco(
     });
     processosSalvos += 1;
 
+    // Issue #91: Indexação histórica automática de CPF/CNPJ das partes e textos
+    const textoConsolidado = proc.historicoPublicacoes
+      .map((pub) => pub.texto || '')
+      .join('\n');
+    await indexarPartesDoProcesso({
+      numeroProcesso: numLimpo,
+      siglaTribunal: proc.siglaTribunal,
+      partes: (proc.partes || []).map((pt) => ({
+        nome: pt.nome,
+        polo: pt.polo,
+      })),
+      textoPublicacao: textoConsolidado,
+      fonte: 'DJEN',
+    }).catch(() => {});
+
+    // Issue #92: Detecção automática de vínculos cross-grau nos textos
+    const vinculos = detectarVinculosNoTexto(
+      numLimpo,
+      textoConsolidado,
+      proc.siglaTribunal
+    );
+    if (vinculos.length > 0) {
+      await registrarVinculosCrossGrau(vinculos).catch(() => {});
+    }
+
     for (const pub of proc.historicoPublicacoes) {
       if (!pub.id) continue;
       await prisma.publicacao.upsert({
@@ -106,6 +137,21 @@ export async function salvarRadarNoBanco(
       });
       publicacoesSalvas += 1;
     }
+
+    // Issue #97: Publica evento em tempo real no stream SSE
+    publicarEventoTempoReal({
+      tipo:
+        proc.urgenciaMaxima === 'ALTA'
+          ? 'ALERTA_URGENCIA_ALTA'
+          : 'NOVA_PUBLICACAO',
+      dados: {
+        numeroProcesso: numLimpo,
+        numeroFormatado: proc.numeroFormatado || numLimpo,
+        tribunal: proc.siglaTribunal,
+        urgencia: proc.urgenciaMaxima,
+        prazoFatal: proc.prazoFatal || null,
+      },
+    });
   }
 
   return { processosSalvos, publicacoesSalvas };

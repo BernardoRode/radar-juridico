@@ -257,11 +257,14 @@ model ApiKeyCliente {
   nome          String
   prefixo       String    // Ex: rk_live_ab12cd34 (para exibição segura)
   chaveHash     String    @unique // SHA-256 da chave bruta
-  plano         String    @default("FREE") // FREE | PRO | ENTERPRISE
-  limiteMensal  Int       @default(1000)
-  usoMesAtual   Int       @default(0)
-  mesReferencia String    // YYYY-MM
-  ativa         Boolean   @default(true)
+  plano                   String    @default("FREE") // FREE | PRO | ENTERPRISE | PAY_AS_YOU_GO
+  limiteMensal            Int       @default(1000)
+  usoMesAtual             Int       @default(0)
+  mesReferencia           String    // YYYY-MM
+  payAsYouGoAtivo         Boolean   @default(false) // Issue #99: Excedente sob demanda sem bloqueio
+  precoExcedenteCentavos  Int       @default(5)     // Issue #99: R$ 0,05 por req excedente
+  creditoPrePagoCentavos  Int       @default(0)     // Issue #99: Saldo pré-pago opcional
+  ativa                   Boolean   @default(true)
   ultimoUsoEm   DateTime?
   criadoEm      DateTime  @default(now())
 
@@ -305,4 +308,86 @@ model RegraAutomacao {
   atualizadoEm     DateTime  @updatedAt
 
   @@index([organizacaoId])
+}
+
+model ParteIndexada {
+  id             String   @id @default(cuid())
+  organizacaoId  String?  // Issue #91: Indexação Histórica Local CPF/CNPJ
+  documento      String   // 11 dígitos (CPF) ou 14 dígitos (CNPJ) sem máscara
+  tipoDocumento  String   // CPF | CNPJ
+  nome           String
+  polo           String   @default("TERCEIRO") // ATIVO | PASSIVO | TERCEIRO
+  numeroProcesso String   // 20 dígitos CNJ
+  siglaTribunal  String
+  fonte          String   @default("DJEN") // DJEN | DATAJUD | MANUAL
+  criadoEm       DateTime @default(now())
+  atualizadoEm   DateTime @updatedAt
+
+  @@unique([documento, numeroProcesso])
+  @@index([documento])
+  @@index([organizacaoId])
+}
+
+model VinculoCrossGrau {
+  id                  String   @id @default(cuid())
+  numeroOrigem        String   // 20 dígitos CNJ
+  numeroRelacionado   String   // 20 dígitos CNJ
+  tipoVinculo         String   // ORIGINARIO | RECURSO_2_GRAU | TRIBUNAL_SUPERIOR | CUMPRIMENTO_SENTENCA | INCIDENTE | CONEXO
+  grauOrigem          String   @default("G1") // G1 | G2 | SUP | EXECUCAO
+  grauRelacionado     String   @default("G2")
+  tribunalOrigem      String?
+  tribunalRelacionado String?
+  confianca           String   @default("ALTA") // ALTA | MEDIA
+  evidencia           String?
+  criadoEm            DateTime @default(now())
+
+  @@unique([numeroOrigem, numeroRelacionado, tipoVinculo])
+  @@index([numeroOrigem])
+  @@index([numeroRelacionado])
+}
+
+model ReclamacaoPreProcessual {
+  id                       String   @id @default(cuid())
+  organizacaoId            String?  // Issue #95: Legal Ops Pré-Processual
+  protocoloExterno         String
+  canal                    String   // PROCON | CONSUMIDOR_GOV | RECLAME_AQUI | OUVIDORIA | OUTRO
+  empresaReclamada         String
+  cnpjReclamada            String?
+  reclamanteNome           String
+  reclamanteCpf            String?
+  assunto                  String
+  descricao                String
+  valorPleiteado           Float?
+  prazoResposta            String?
+  status                   String   @default("ABERTA") // ABERTA | EM_TRATATIVA | ACORDO_PRE_PROCESSUAL | CONVERTIDA_EM_PROCESSO | ENCERRADA
+  numeroProcessoConvertido String?
+  riscoJudicializacao      String   @default("MEDIO") // ALTO | MEDIO | BAIXO
+  payloadBrutoJson         String?
+  criadoEm                 DateTime @default(now())
+  atualizadoEm             DateTime @updatedAt
+
+  @@unique([canal, protocoloExterno])
+  @@index([organizacaoId])
+  @@index([empresaReclamada])
+}
+
+model DeadLetterWebhook {
+  id               String    @id @default(cuid())
+  organizacaoId    String?   // Issue #97: Dead-Letter Queue (DLQ) para Webhooks
+  webhookId        String?
+  eventId          String
+  canal            String
+  urlDestino       String
+  evento           String
+  payloadJson      String
+  ultimoErro       String
+  httpStatus       Int?
+  tentativasTotais Int       @default(3)
+  status           String    @default("PENDENTE") // PENDENTE | REPROCESSADO | DESCARTADO
+  proximoRetryEm   DateTime?
+  criadoEm         DateTime  @default(now())
+  atualizadoEm     DateTime  @updatedAt
+
+  @@index([status])
+  @@index([eventId])
 }

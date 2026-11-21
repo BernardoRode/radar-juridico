@@ -257,6 +257,87 @@ export function gerarEspecificacaoOpenApi(baseUrl = 'http://localhost:3000') {
           responses: { '200': { description: 'Regra removida' } },
         },
       },
+      '/api/partes/consultar': {
+        get: {
+          tags: ['Fase 14 — Diferenciais B2B'],
+          summary: 'Busca histórica de processos por CPF ou CNPJ na base indexada (#91)',
+          parameters: [{ name: 'documento', in: 'query', required: true, schema: { type: 'string' } }],
+          responses: { '200': { description: 'Processos e distribuição de polos por documento' } },
+        },
+        post: {
+          tags: ['Fase 14 — Diferenciais B2B'],
+          summary: 'Reindexa processos locais na tabela ParteIndexada (#91)',
+          responses: { '200': { description: 'Resumo da reindexação' } },
+        },
+      },
+      '/api/processos/arvore': {
+        get: {
+          tags: ['Fase 14 — Diferenciais B2B'],
+          summary: 'Árvore processual cross-grau (1º Grau, 2º Grau, STJ/TST, Cumprimento) (#92)',
+          parameters: [{ name: 'numeroProcesso', in: 'query', required: true, schema: { type: 'string' } }],
+          responses: { '200': { description: 'Árvore hierárquica e timeline unificada' } },
+        },
+        post: {
+          tags: ['Fase 14 — Diferenciais B2B'],
+          summary: 'Vincula dois processos cross-grau (#92)',
+          responses: { '200': { description: 'Vínculo registrado e árvore atualizada' } },
+        },
+      },
+      '/api/legal-ops/reclamacoes': {
+        get: {
+          tags: ['Fase 14 — Diferenciais B2B'],
+          summary: 'Lista reclamações pré-processuais (Procon / Consumidor.gov / Reclame Aqui) (#95)',
+          responses: { '200': { description: 'Lista e resumo de risco de judicialização' } },
+        },
+        post: {
+          tags: ['Fase 14 — Diferenciais B2B'],
+          summary: 'Ingestão via API/Webhook de reclamação pré-processual (#95)',
+          responses: { '201': { description: 'Reclamação ingerida e classificada' } },
+        },
+      },
+      '/api/eventos/stream': {
+        get: {
+          tags: ['Fase 14 — Diferenciais B2B'],
+          summary: 'Stream SSE (Server-Sent Events) em tempo real (#97)',
+          responses: { '200': { description: 'text/event-stream contínuo' } },
+        },
+      },
+      '/api/webhooks/dlq': {
+        get: {
+          tags: ['Fase 14 — Diferenciais B2B'],
+          summary: 'Lista webhooks na Dead-Letter Queue (DLQ) (#97)',
+          responses: { '200': { description: 'Itens pendentes/reprocessados' } },
+        },
+        post: {
+          tags: ['Fase 14 — Diferenciais B2B'],
+          summary: 'Reprocessa webhooks da Dead-Letter Queue (#97)',
+          responses: { '200': { description: 'Resultado do reprocessamento' } },
+        },
+      },
+      '/api/calculos/atualizacao-monetaria': {
+        get: {
+          tags: ['Fase 14 — Diferenciais B2B'],
+          summary: 'Lista regimes de atualização monetária suportados (#98)',
+          responses: { '200': { description: 'Regimes (ADC 58 STF, SELIC, IPCA-E, INPC)' } },
+        },
+        post: {
+          tags: ['Fase 14 — Diferenciais B2B'],
+          summary: 'Simula atualização monetária (SELIC / IPCA-E / ADC 58 STF) (#98)',
+          responses: { '200': { description: 'Memória mensal e valor atualizado total' } },
+        },
+      },
+      '/api/billing/quota': {
+        get: {
+          tags: ['Fase 14 — Diferenciais B2B'],
+          summary: 'Consulta cota, consumo e headers X-Quota-* (#99)',
+          responses: { '200': { description: 'Resumo de consumo e planos Pay-as-you-go' } },
+        },
+        post: {
+          tags: ['Fase 14 — Diferenciais B2B'],
+          summary: 'Ativa Pay-as-you-go ou altera plano self-service (#99)',
+          responses: { '200': { description: 'Plano/cota atualizado' } },
+        },
+      },
     },
   };
 }

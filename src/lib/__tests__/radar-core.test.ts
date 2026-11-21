@@ -1,4 +1,16 @@
 import { normalizarItensPorPaginaDjen } from '@/lib/djen';
+import { extrairDocumentosValidosDoTexto } from '@/lib/indexador-partes';
+import { detectarVinculosNoTexto, inferirGrauProcesso } from '@/lib/arvore-cross-grau';
+import {
+  calcularRiscoJudicializacao,
+  normalizarCanalPreProcessual,
+} from '@/lib/pre-processual';
+import {
+  assinarEventosTempoReal,
+  publicarEventoTempoReal,
+} from '@/lib/eventos-stream';
+import { calcularAtualizacaoMonetaria } from '@/lib/atualizacao-monetaria';
+import { calcularInfoQuota } from '@/lib/billing-quota';
 import { detectarFalhaParcialShardsDatajud } from '@/lib/datajud';
 import { gerarEventIdWebhook } from '@/lib/webhooks';
 import {
@@ -566,5 +578,80 @@ describe('Fase 14 & 15 — Engenharia B2B: Feriados Móveis, Prazo em Dobro, TPU
     const tema = resolverPrevalenciaTema1180STJ({ houveIntimacaoPortal: true });
     expect(tema.fontePrevalente).toBe('PORTAL_ELETRONICO');
     expect(tema.prazoCienciaTacitaDiasCorridos).toBe(10);
+  });
+});
+
+describe('Fase 14 — Indexação CPF/CNPJ, Cross-Grau, Pré-Processual, SSE, SELIC & Quota (#91, #92, #95, #97, #98, #99)', () => {
+  it('extrai apenas CPFs e CNPJs matematicamente válidos de texto jurídico (#91)', () => {
+    const docs = extrairDocumentosValidosDoTexto(
+      'Réu CNPJ 00.000.000/0001-91 e inválido 11.111.111/1111-11 e CPF inválido 123.456.789-00.'
+    );
+    expect(docs).toEqual([{ documento: '00000000000191', tipoDocumento: 'CNPJ' }]);
+  });
+
+  it('detecta vínculos cross-grau (Agravo / Originário / Cumprimento) e infere grau (#92)', () => {
+    expect(inferirGrauProcesso('STJ', 'Recurso Especial')).toBe('SUP');
+    expect(inferirGrauProcesso('TJRS', 'Agravo de Instrumento')).toBe('G2');
+    const vinculos = detectarVinculosNoTexto(
+      '5001111-22.2025.8.21.0000',
+      'Trata-se de Agravo de Instrumento contra decisão proferida no processo originário 5009926-95.2020.4.04.7201.',
+      'TJRS'
+    );
+    expect(vinculos.length).toBe(1);
+    expect(vinculos[0].tipoVinculo).toBe('ORIGINARIO');
+    expect(vinculos[0].numeroOrigem).toBe('50099269520204047201');
+  });
+
+  it('classifica risco de judicialização em reclamações pré-processuais (#95)', () => {
+    expect(normalizarCanalPreProcessual('consumidor.gov.br')).toBe('CONSUMIDOR_GOV');
+    const riscoAlto = calcularRiscoJudicializacao({
+      canal: 'PROCON',
+      assunto: 'Negativação indevida Serasa',
+      descricao: 'Consumidor ameaça ingressar com ação judicial por danos morais.',
+      valorPleiteado: 15000,
+    });
+    expect(riscoAlto).toBe('ALTO');
+  });
+
+  it('publica e entrega eventos em tempo real para assinantes SSE (#97)', () => {
+    const recebidos: string[] = [];
+    const cancelar = assinarEventosTempoReal((ev) => recebidos.push(ev.tipo));
+    publicarEventoTempoReal({
+      tipo: 'ALERTA_URGENCIA_ALTA',
+      dados: { numeroProcesso: '123' },
+    });
+    cancelar();
+    expect(recebidos).toContain('ALERTA_URGENCIA_ALTA');
+  });
+
+  it('calcula atualização monetária pela ADC 58 STF (IPCA-E pré + SELIC judicial) (#98)', () => {
+    const calc = calcularAtualizacaoMonetaria({
+      valorOriginal: 10000,
+      dataInicial: '2024-01-01',
+      dataCitacao: '2024-07-01',
+      dataFinal: '2024-12-01',
+      regime: 'ADC_58_STF',
+      multaArt523Cpc: true,
+      honorariosSucumbenciaPct: 10,
+    });
+    expect(calc.mesesComputados).toBe(12);
+    expect(calc.memoriaMensal[0].fase).toBe('PRE_JUDICIAL');
+    expect(calc.memoriaMensal[6].fase).toBe('JUDICIAL');
+    expect(calc.valorAtualizadoTotal).toBeGreaterThan(12000);
+    expect(calc.multaArt523Valor).toBeGreaterThan(0);
+    expect(calc.honorariosValor).toBeGreaterThan(0);
+  });
+
+  it('calcula headers X-Quota-* e custo excedente Pay-as-you-go (#99)', () => {
+    const info = calcularInfoQuota({
+      plano: 'PAY_AS_YOU_GO',
+      limiteMensal: 500,
+      usoMesAtual: 600,
+      payAsYouGoAtivo: true,
+      precoExcedenteCentavos: 5,
+    });
+    expect(info.restante).toBe(0);
+    expect(info.excedenteReqs).toBe(100);
+    expect(info.custoExcedenteBrl).toBe('5.00');
   });
 });

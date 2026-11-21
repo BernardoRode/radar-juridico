@@ -2,12 +2,18 @@ import crypto from 'crypto';
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { extrairUsuarioJwt } from '@/lib/auth-jwt';
+import {
+  aplicarHeadersQuota,
+  calcularInfoQuota,
+  QuotaHeadersInfo,
+} from '@/lib/billing-quota';
 
 export interface EscopoTenant {
   organizacaoId: string | null;
   origem: 'JWT' | 'API_KEY_CLIENTE' | 'API_KEY_MESTRA' | 'LOCAL_LIVRE';
   plano?: string;
   filtroPrisma: { organizacaoId?: string };
+  quota?: QuotaHeadersInfo;
   erroQuota?: NextResponse;
 }
 
@@ -75,7 +81,21 @@ export async function resolverEscopoOrganizacao(
         const mesAtual = obterMesAtual();
         const usoAtual = registro.mesReferencia === mesAtual ? registro.usoMesAtual : 0;
 
-        if (usoAtual >= registro.limiteMensal) {
+        if (usoAtual >= registro.limiteMensal && !registro.payAsYouGoAtivo) {
+          const quotaExcedida = calcularInfoQuota({
+            plano: registro.plano,
+            limiteMensal: registro.limiteMensal,
+            usoMesAtual: usoAtual,
+            payAsYouGoAtivo: registro.payAsYouGoAtivo,
+            precoExcedenteCentavos: registro.precoExcedenteCentavos,
+          });
+          const respErro = NextResponse.json(
+            {
+              sucesso: false,
+              erro: `Limite mensal da API Key atingido (${registro.limiteMensal} req/mês no plano ${registro.plano}). Ative Pay-as-you-go em /api/billing/quota para continuar sem bloqueio.`,
+            },
+            { status: 429 }
+          );
           return {
             organizacaoId: registro.organizacaoId,
             origem: 'API_KEY_CLIENTE',
@@ -83,27 +103,31 @@ export async function resolverEscopoOrganizacao(
             filtroPrisma: registro.organizacaoId
               ? { organizacaoId: registro.organizacaoId }
               : {},
-            erroQuota: NextResponse.json(
-              {
-                sucesso: false,
-                erro: `Limite mensal da API Key atingido (${registro.limiteMensal} req/mês no plano ${registro.plano}).`,
-              },
-              { status: 429 }
-            ),
+            quota: quotaExcedida,
+            erroQuota: aplicarHeadersQuota(respErro, quotaExcedida),
           };
         }
 
+        const novoUso = usoAtual + 1;
         // Contabiliza uso mensal em background
         prisma.apiKeyCliente
           .update({
             where: { id: registro.id },
             data: {
               mesReferencia: mesAtual,
-              usoMesAtual: usoAtual + 1,
+              usoMesAtual: novoUso,
               ultimoUsoEm: new Date(),
             },
           })
           .catch(() => {});
+
+        const quotaAtual = calcularInfoQuota({
+          plano: registro.plano,
+          limiteMensal: registro.limiteMensal,
+          usoMesAtual: novoUso,
+          payAsYouGoAtivo: registro.payAsYouGoAtivo,
+          precoExcedenteCentavos: registro.precoExcedenteCentavos,
+        });
 
         return {
           organizacaoId: registro.organizacaoId,
@@ -112,6 +136,7 @@ export async function resolverEscopoOrganizacao(
           filtroPrisma: registro.organizacaoId
             ? { organizacaoId: registro.organizacaoId }
             : {},
+          quota: quotaAtual,
         };
       }
     } catch {
